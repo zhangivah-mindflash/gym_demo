@@ -15,11 +15,11 @@ export const modelSettingDefinitions: ModelSettingDefinition[] = [
   {
     id: "llm-provider",
     label: "调用协议",
-    defaultValue: "OpenAI Compatible",
+    defaultValue: "auto",
     group: "连接配置",
-    helpText: "当前接的是 OpenAI 兼容的 Chat Completions 接口。",
+    helpText: "支持 auto / openai-chat-completions / openai-responses。阿里百炼建议优先使用 openai-responses，auto 模式会自动为 DashScope 选择更合适的接口。",
     inputType: "text",
-    placeholder: "OpenAI Compatible",
+    placeholder: "auto",
   },
   {
     id: "llm-base-url",
