@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { MainLayout } from "@/components/main-layout";
 import { Reveal } from "@/components/reveal";
 import { useDemo } from "@/lib/demo-store";
-import type { AssistantMode, AssistantResponse } from "@/lib/demo-types";
-import { isAssistantReady } from "@/lib/model-settings";
+import type { AssistantAttachmentKind, AssistantMode, AssistantResponse } from "@/lib/demo-types";
+import { isAssistantReady, supportsMultimodalAssistant } from "@/lib/model-settings";
 
 const presets: Record<AssistantMode, string[]> = {
   plan: [
@@ -51,6 +51,9 @@ export default function MemberAssistantPage() {
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
+  const [attachmentKind, setAttachmentKind] = useState<AssistantAttachmentKind>("image");
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [attachmentPreviewUrl, setAttachmentPreviewUrl] = useState("");
 
   useEffect(() => {
     if (!isBootstrapped) return;
@@ -59,10 +62,29 @@ export default function MemberAssistantPage() {
   }, [isBootstrapped, session.isAuthenticated, session.role, router]);
 
   const assistantReady = useMemo(() => isAssistantReady(modelSettings), [modelSettings]);
+  const multimodalReady = useMemo(() => supportsMultimodalAssistant(modelSettings), [modelSettings]);
   const appliedOutput = appliedAssistantOutputs[mode];
 
   useEffect(() => {
     setMessage(presets[mode][0]);
+  }, [mode]);
+
+  useEffect(() => {
+    if (!attachmentFile) {
+      setAttachmentPreviewUrl("");
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(attachmentFile);
+    setAttachmentPreviewUrl(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [attachmentFile]);
+
+  useEffect(() => {
+    if (mode !== "guidance") {
+      setAttachmentFile(null);
+      setAttachmentPreviewUrl("");
+    }
   }, [mode]);
 
   async function submitAssistantRequest() {
@@ -70,11 +92,23 @@ export default function MemberAssistantPage() {
     setError("");
 
     try {
-      const apiResponse = await fetch("/api/assistant", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode, message }),
-      });
+      const apiResponse = await (attachmentFile && mode === "guidance"
+        ? (() => {
+            const formData = new FormData();
+            formData.append("mode", mode);
+            formData.append("message", message);
+            formData.append("attachmentKind", attachmentKind);
+            formData.append("attachment", attachmentFile);
+            return fetch("/api/assistant", {
+              method: "POST",
+              body: formData,
+            });
+          })()
+        : fetch("/api/assistant", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ mode, message }),
+          }));
 
       const json = (await apiResponse.json()) as { data?: AssistantResponse; error?: string };
       if (!apiResponse.ok || !json.data) {
@@ -161,13 +195,90 @@ export default function MemberAssistantPage() {
           <textarea rows={6} value={message} onChange={(event) => setMessage(event.target.value)} />
         </label>
 
+        {mode === "guidance" ? (
+          <div className="media-uploader">
+            <div className="media-uploader-head">
+              <div>
+                <span className="mini-label">动作纠错上传</span>
+                <strong>上传照片或短视频，让 AI 观察你的动作</strong>
+                <p>建议上传单个动作、画面清晰、光线稳定的素材。视频建议 10-20 秒内。</p>
+              </div>
+              <span className={multimodalReady ? "badge-accent" : "badge-neutral"}>
+                {multimodalReady ? "🎥 支持多模态" : "⚠️ 需可识图/视频模型"}
+              </span>
+            </div>
+
+            <div className="filter-row">
+              <button
+                className={attachmentKind === "image" ? "segment segment-active" : "segment"}
+                onClick={() => {
+                  setAttachmentKind("image");
+                  setAttachmentFile(null);
+                }}
+                type="button"
+              >
+                上传图片
+              </button>
+              <button
+                className={attachmentKind === "video" ? "segment segment-active" : "segment"}
+                onClick={() => {
+                  setAttachmentKind("video");
+                  setAttachmentFile(null);
+                }}
+                type="button"
+              >
+                上传视频
+              </button>
+            </div>
+
+            <label className="upload-dropzone">
+              <input
+                accept={attachmentKind === "image" ? "image/*" : "video/mp4,video/quicktime,video/webm"}
+                className="upload-input"
+                onChange={(event) => setAttachmentFile(event.target.files?.[0] ?? null)}
+                type="file"
+              />
+              <span className="emoji-mark" aria-hidden="true">{attachmentKind === "image" ? "📸" : "🎬"}</span>
+              <strong>{attachmentFile ? attachmentFile.name : attachmentKind === "image" ? "选择一张动作照片" : "选择一个动作视频"}</strong>
+              <p>{attachmentKind === "image" ? "支持 jpg/png/webp/gif/heic" : "支持 mp4/mov/webm，建议不超过 16MB"}</p>
+            </label>
+
+            {attachmentPreviewUrl ? (
+              <div className="upload-preview-card">
+                {attachmentKind === "image" ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img alt="动作上传预览" className="upload-preview-image" src={attachmentPreviewUrl} />
+                ) : (
+                  <video className="upload-preview-video" controls src={attachmentPreviewUrl} />
+                )}
+                <div className="upload-preview-meta">
+                  <span className="badge-outline">{attachmentKind === "image" ? "📸 图片预览" : "🎬 视频预览"}</span>
+                  <button className="button-tertiary compact" onClick={() => setAttachmentFile(null)} type="button">
+                    移除素材
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {!multimodalReady ? (
+              <div className="warning-banner">
+                当前管理员配置的模型不一定支持动作纠错素材分析。若上传后仍返回通用建议，请让管理员切换到支持图片/视频理解的模型。
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         {error ? <div className="empty-state">{error}</div> : null}
 
         <div className="submit-row">
           <button className="button-primary" disabled={isSubmitting || !message.trim()} onClick={() => void submitAssistantRequest()} type="button">
             {isSubmitting ? "生成中..." : `生成${modeLabels[mode]}建议`}
           </button>
-          <span className="helper-text">生成结果只在你确认后才会保存到对应页面。</span>
+          <span className="helper-text">
+            {mode === "guidance" && attachmentFile
+              ? "将结合你上传的素材与当前问题生成动作纠错建议。"
+              : "生成结果只在你确认后才会保存到对应页面。"}
+          </span>
         </div>
         </section>
       </Reveal>

@@ -87,6 +87,8 @@ export type ModelSetting = {
 
 export type AssistantMode = "plan" | "guidance" | "review";
 
+export type AssistantAttachmentKind = "image" | "video";
+
 export type AssistantPlanDay = {
   dayLabel: string;
   focus: string;

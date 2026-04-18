@@ -71,7 +71,7 @@ export const modelSettingDefinitions: ModelSettingDefinition[] = [
     id: "guidance-system",
     label: "动作指导提示词",
     defaultValue:
-      "输出动作要点、热身、放松、RPE/休息、风险提醒，并引用给定知识库条目。高风险内容必须保守处理。",
+      "输出动作要点、热身、放松、RPE/休息、风险提醒，并引用给定知识库条目。若用户上传了动作照片或视频，应优先做动作纠错：指出稳定问题、发力顺序、动作路径偏差和下一次训练的改进重点。高风险内容必须保守处理。",
     group: "提示词",
     helpText: "用于动作指导与风险边界说明。",
     inputType: "textarea",
@@ -126,4 +126,16 @@ export function withModelSettingMeta(setting: ModelSetting, allowSecretValue: bo
 export function isAssistantReady(settings: ModelSetting[]) {
   const map = new Map(settings.map((item) => [item.id, item.value]));
   return Boolean(map.get("llm-base-url") && map.get("llm-api-key") && map.get("llm-model"));
+}
+
+export function supportsMultimodalAssistant(settings: ModelSetting[]) {
+  const map = new Map(settings.map((item) => [item.id, item.value.trim().toLowerCase()]));
+  const model = map.get("llm-model") ?? "";
+  const baseUrl = map.get("llm-base-url") ?? "";
+
+  if (/dashscope\.aliyuncs\.com/.test(baseUrl)) {
+    return Boolean(model);
+  }
+
+  return /(gpt-4\.1|gpt-4o|gpt-4\.5|gpt-5|omni|vision|vl)/.test(model);
 }
