@@ -147,7 +147,7 @@ export default function ModelSettingsPage() {
           <button className="button-secondary" disabled={isSaving || isTesting} onClick={() => void testCurrentModel()} type="button">
             {isTesting ? "测试中..." : "测试模型"}
           </button>
-          <span className="helper-text">当前版本按 OpenAI 兼容 `chat/completions` 协议调用外部模型。</span>
+          <span className="helper-text">当前版本支持 `openai-chat-completions` 与 `openai-responses`；阿里百炼建议优先用 `auto` 或 `openai-responses`。</span>
         </div>
       </section>
     </StaffLayout>

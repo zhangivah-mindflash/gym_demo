@@ -29,12 +29,53 @@ type LlmResponsePayload = Partial<AssistantResponse> & {
   nextSteps?: unknown;
 };
 
+type ResponsesApiJson = {
+  output_text?: string;
+  output?: Array<{
+    content?: Array<{
+      type?: string;
+      text?: string;
+    }>;
+  }>;
+};
+
 function containsRiskSignal(text: string) {
   return /(痛|疼|晕|眩晕|胸闷|旧伤|不适|麻|产后|孕)/.test(text);
 }
 
 function trimBaseUrl(baseUrl: string) {
   return baseUrl.replace(/\/+$/, "");
+}
+
+function isDashScope(baseUrl: string) {
+  return /dashscope\.aliyuncs\.com/i.test(baseUrl);
+}
+
+function normalizeProtocol(value: string | undefined) {
+  return (value ?? "auto").trim().toLowerCase();
+}
+
+function resolveProtocol(settings: AssistantSettings) {
+  const protocol = normalizeProtocol(settings["llm-provider"]);
+  const baseUrl = settings["llm-base-url"]?.trim() ?? "";
+
+  if (protocol === "openai-chat-completions" || protocol === "chat-completions" || protocol === "chat") {
+    return "openai-chat-completions" as const;
+  }
+
+  if (protocol === "openai-responses" || protocol === "responses") {
+    return "openai-responses" as const;
+  }
+
+  if (isDashScope(baseUrl)) {
+    return "openai-responses" as const;
+  }
+
+  return "openai-chat-completions" as const;
+}
+
+function buildSystemPrompt(mode: AssistantMode, settings: AssistantSettings) {
+  return `${settings["assistant-system"] ?? ""}\n${buildModePrompt(mode, settings)}\n你必须只返回合法 JSON，不要输出 markdown 代码块。`;
 }
 
 function parseProviderError(status: number, bodyText: string) {
@@ -109,6 +150,33 @@ function extractJsonObject(text: string) {
     throw new Error("LLM did not return JSON");
   }
   return text.slice(start, end + 1);
+}
+
+function extractResponsesText(json: ResponsesApiJson) {
+  if (json.output_text?.trim()) {
+    return json.output_text.trim();
+  }
+
+  const chunks =
+    json.output
+      ?.flatMap((item) => item.content ?? [])
+      .filter((item) => item.type === "output_text" && item.text)
+      .map((item) => item.text?.trim() ?? "")
+      .filter(Boolean) ?? [];
+
+  if (chunks.length) {
+    return chunks.join("\n");
+  }
+
+  return "";
+}
+
+function parseAbortError(error: unknown, timeoutMs: number) {
+  if (error instanceof Error && error.name === "AbortError") {
+    return new Error(`请求超时：外部模型在 ${Math.round(timeoutMs / 1000)} 秒内未返回结果。请检查调用协议、Base URL、网络状态，或关闭模型思考模式。`);
+  }
+
+  return error instanceof Error ? error : new Error("外部模型请求失败。");
 }
 
 function currentCitations(state: DemoState) {
@@ -341,7 +409,8 @@ async function callOpenAiCompatible(
   const baseUrl = settings["llm-base-url"]?.trim();
   const apiKey = settings["llm-api-key"]?.trim();
   const model = settings["llm-model"]?.trim();
-  const providerLabel = `${settings["llm-provider"] || "OpenAI Compatible"} / ${model}`;
+  const protocol = resolveProtocol(settings);
+  const providerLabel = `${protocol} / ${model}`;
 
   if (!baseUrl || !apiKey || !model) {
     if (options?.strict) {
@@ -352,32 +421,57 @@ async function callOpenAiCompatible(
     return buildFallback(state, mode, message);
   }
 
+  const isDashScopeProvider = isDashScope(baseUrl);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20000);
+  const timeoutMs = options?.strict ? 60000 : 45000;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(`${trimBaseUrl(baseUrl)}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.35,
-        messages: [
-          {
-            role: "system",
-            content: `${settings["assistant-system"] ?? ""}\n${buildModePrompt(mode, settings)}\n你必须只返回合法 JSON，不要输出 markdown 代码块。`,
-          },
-          {
-            role: "user",
-            content: buildUserContext(state, mode, message),
-          },
-        ],
-      }),
-      signal: controller.signal,
-    });
+    const headers = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    };
+    const temperature = 0.35;
+    const systemPrompt = buildSystemPrompt(mode, settings);
+    const userPrompt = buildUserContext(state, mode, message);
+    const dashScopeCompatFields = isDashScopeProvider ? { enable_thinking: false } : {};
+
+    const response =
+      protocol === "openai-responses"
+        ? await fetch(`${trimBaseUrl(baseUrl)}/responses`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              model,
+              temperature,
+              input: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt },
+              ],
+              ...dashScopeCompatFields,
+            }),
+            signal: controller.signal,
+          })
+        : await fetch(`${trimBaseUrl(baseUrl)}/chat/completions`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              model,
+              temperature,
+              messages: [
+                {
+                  role: "system",
+                  content: systemPrompt,
+                },
+                {
+                  role: "user",
+                  content: userPrompt,
+                },
+              ],
+              ...dashScopeCompatFields,
+            }),
+            signal: controller.signal,
+          });
 
     if (!response.ok) {
       const bodyText = await response.text();
@@ -386,10 +480,20 @@ async function callOpenAiCompatible(
 
     const json = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
+      output_text?: string;
+      output?: Array<{
+        content?: Array<{
+          type?: string;
+          text?: string;
+        }>;
+      }>;
     };
-    const content = json.choices?.[0]?.message?.content;
+    const content =
+      protocol === "openai-responses"
+        ? extractResponsesText(json)
+        : json.choices?.[0]?.message?.content;
     if (!content) {
-      throw new Error("LLM response missing content");
+      throw new Error(`模型接口已返回响应，但 ${protocol} 结果中没有可读取的文本内容。`);
     }
 
     let parsed: LlmResponsePayload;
@@ -399,6 +503,8 @@ async function callOpenAiCompatible(
       throw new Error("模型已返回内容，但不是合法 JSON。请检查模型是否遵守 JSON 输出要求。");
     }
     return normalizeResponse(parsed, mode, providerLabel);
+  } catch (error) {
+    throw parseAbortError(error, timeoutMs);
   } finally {
     clearTimeout(timeout);
   }
