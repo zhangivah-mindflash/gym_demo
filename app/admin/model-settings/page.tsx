@@ -17,6 +17,7 @@ export default function ModelSettingsPage() {
   const router = useRouter();
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [isTesting, setIsTesting] = useState(false);
+  const [isTestingMultimodal, setIsTestingMultimodal] = useState(false);
 
   useEffect(() => {
     setDraft(
@@ -53,8 +54,13 @@ export default function ModelSettingsPage() {
     }
   }
 
-  async function testCurrentModel() {
-    setIsTesting(true);
+  async function testCurrentModel(testType: "text" | "multimodal") {
+    if (testType === "text") {
+      setIsTesting(true);
+    } else {
+      setIsTestingMultimodal(true);
+    }
+
     try {
       const config = Object.fromEntries(
         modelSettings.flatMap((setting) => {
@@ -74,7 +80,7 @@ export default function ModelSettingsPage() {
       const response = await fetch("/api/assistant/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ config }),
+        body: JSON.stringify({ config, testType }),
       });
 
       const json = (await response.json()) as { ok?: boolean; message?: string; error?: string };
@@ -90,7 +96,11 @@ export default function ModelSettingsPage() {
     } catch (error) {
       window.alert(`模型测试失败：${error instanceof Error ? error.message : "请求异常"}`);
     } finally {
-      setIsTesting(false);
+      if (testType === "text") {
+        setIsTesting(false);
+      } else {
+        setIsTestingMultimodal(false);
+      }
     }
   }
 
@@ -144,10 +154,18 @@ export default function ModelSettingsPage() {
           <button className="button-primary" disabled={isSaving} onClick={() => void saveAllSettings()} type="button">
             保存模型配置
           </button>
-          <button className="button-secondary" disabled={isSaving || isTesting} onClick={() => void testCurrentModel()} type="button">
-            {isTesting ? "测试中..." : "测试模型"}
+          <button className="button-secondary" disabled={isSaving || isTesting} onClick={() => void testCurrentModel("text")} type="button">
+            {isTesting ? "测试中..." : "测试文本模型"}
           </button>
-          <span className="helper-text">当前版本支持 `openai-chat-completions` 与 `openai-responses`；阿里百炼建议优先用 `auto` 或 `openai-responses`。</span>
+          <button
+            className="button-secondary"
+            disabled={isSaving || isTestingMultimodal}
+            onClick={() => void testCurrentModel("multimodal")}
+            type="button"
+          >
+            {isTestingMultimodal ? "测试中..." : "测试多模态模型"}
+          </button>
+          <span className="helper-text">文本测试校验普通生成链路；多模态测试会额外校验图片和视频输入。当前版本支持 `openai-chat-completions` 与 `openai-responses`；阿里百炼建议优先用 `auto`。</span>
         </div>
       </section>
     </StaffLayout>

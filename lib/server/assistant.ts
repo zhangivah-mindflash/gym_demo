@@ -1,5 +1,6 @@
 import { guidanceBase, nutritionHints } from "@/lib/mock-data";
 import type {
+  AssistantAttachmentKind,
   AssistantCitation,
   AssistantMode,
   AssistantPlanDay,
@@ -13,9 +14,17 @@ type AssistantRequest = {
   selectedMemberId?: string | null;
   mode: AssistantMode;
   message: string;
+  attachment?: AssistantAttachment | null;
 };
 
 type AssistantSettings = Record<string, string>;
+
+type AssistantAttachment = {
+  kind: AssistantAttachmentKind;
+  mimeType: string;
+  dataUrl: string;
+  filename?: string;
+};
 
 type LlmResponsePayload = Partial<AssistantResponse> & {
   highlights?: unknown;
@@ -37,6 +46,36 @@ type ResponsesApiJson = {
       text?: string;
     }>;
   }>;
+};
+
+type ChatCompletionsJson = {
+  choices?: Array<{
+    message?: {
+      content?:
+        | string
+        | Array<{
+            type?: string;
+            text?: string;
+          }>;
+    };
+  }>;
+};
+
+const multimodalTestSamples = {
+  image: {
+    kind: "image" as const,
+    mimeType: "image/jpeg",
+    dataUrl: "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
+    filename: "multimodal-test-image.jpg",
+    prompt: "请简单描述图片主体，并返回合法 JSON。",
+  },
+  video: {
+    kind: "video" as const,
+    mimeType: "video/mp4",
+    dataUrl: "https://help-static-aliyun-doc.aliyuncs.com/file-manage-files/zh-CN/20241115/cqqkru/1.mp4",
+    filename: "multimodal-test-video.mp4",
+    prompt: "请简单描述视频主体，并返回合法 JSON。",
+  },
 };
 
 function containsRiskSignal(text: string) {
@@ -179,6 +218,21 @@ function parseAbortError(error: unknown, timeoutMs: number) {
   return error instanceof Error ? error : new Error("外部模型请求失败。");
 }
 
+function extractChatText(json: ChatCompletionsJson) {
+  const content = json.choices?.[0]?.message?.content;
+  if (typeof content === "string") {
+    return content.trim();
+  }
+
+  const chunks =
+    content
+      ?.filter((item) => item.type === "text" && item.text)
+      .map((item) => item.text?.trim() ?? "")
+      .filter(Boolean) ?? [];
+
+  return chunks.join("\n");
+}
+
 function currentCitations(state: DemoState) {
   const enabledKb = new Set(state.knowledgeBase.filter((entry) => entry.enabled).map((entry) => entry.id));
   return guidanceBase.citations
@@ -234,16 +288,18 @@ function planFallback(state: DemoState, message: string): AssistantResponse {
   };
 }
 
-function guidanceFallback(state: DemoState, message: string): AssistantResponse {
+function guidanceFallback(state: DemoState, message: string, options?: { mediaAttached?: boolean }): AssistantResponse {
   const riskFlag = containsRiskSignal(message);
+  const mediaNotice = options?.mediaAttached ? "由于未成功完成媒体识别，以下内容仅为通用动作指导。" : "";
 
   return {
     mode: "guidance",
     title: `${guidanceBase.exercise} 动作指导`,
-    summary: `针对当前动作问题输出要点、热身、放松与风险提醒，${riskFlag ? "并提高安全边界" : "保持常规指导强度"}。`,
+    summary: `针对当前动作问题输出要点、热身、放松与风险提醒，${riskFlag ? "并提高安全边界" : "保持常规指导强度"}。${mediaNotice}`,
     highlights: [
       `${guidanceBase.target} 为主要目标肌群。`,
       `建议强度控制在 RPE ${guidanceBase.rpe}，组间休息 ${guidanceBase.rest}。`,
+      ...(options?.mediaAttached ? ["未完成对上传照片/视频的真实识别，请先检查模型多模态能力后再重试。"] : []),
       riskFlag ? "用户问题中存在风险信号，动作指导必须以停止刺激和升级提示为先。" : "当前以动作质量优先，不追求过度加重。",
     ],
     trainingPlan: [],
@@ -311,9 +367,9 @@ function reviewFallback(state: DemoState, message: string): AssistantResponse {
   };
 }
 
-function buildFallback(state: DemoState, mode: AssistantMode, message: string) {
+function buildFallback(state: DemoState, mode: AssistantMode, message: string, options?: { mediaAttached?: boolean }) {
   if (mode === "plan") return planFallback(state, message);
-  if (mode === "guidance") return guidanceFallback(state, message);
+  if (mode === "guidance") return guidanceFallback(state, message, options);
   return reviewFallback(state, message);
 }
 
@@ -337,7 +393,12 @@ function normalizeSettings(overrides?: Partial<AssistantSettings>) {
   ) as AssistantSettings;
 }
 
-function buildUserContext(state: DemoState, mode: AssistantMode, message: string) {
+function buildUserContext(
+  state: DemoState,
+  mode: AssistantMode,
+  message: string,
+  options?: { attachment?: AssistantAttachment | null },
+) {
   const enabledKnowledgeBase = state.knowledgeBase
     .filter((entry) => entry.enabled)
     .map((entry) => ({
@@ -356,6 +417,15 @@ function buildUserContext(state: DemoState, mode: AssistantMode, message: string
       latestReview: state.review,
       enabledKnowledgeBase,
       guidanceReference: mode === "guidance" ? guidanceBase : undefined,
+      uploadedMedia:
+        mode === "guidance" && options?.attachment
+          ? {
+              kind: options.attachment.kind,
+              filename: options.attachment.filename,
+              mimeType: options.attachment.mimeType,
+              task: "请基于媒体中的动作表现，判断动作是否标准，并输出可执行的纠错建议。",
+            }
+          : undefined,
       outputContract: {
         title: "string",
         summary: "string",
@@ -404,7 +474,7 @@ async function callOpenAiCompatible(
   mode: AssistantMode,
   message: string,
   settings: AssistantSettings,
-  options?: { strict?: boolean },
+  options?: { strict?: boolean; attachment?: AssistantAttachment | null },
 ) {
   const baseUrl = settings["llm-base-url"]?.trim();
   const apiKey = settings["llm-api-key"]?.trim();
@@ -418,10 +488,11 @@ async function callOpenAiCompatible(
       if (!apiKey) throw new Error("缺少 API Key。");
       throw new Error("缺少模型名称。");
     }
-    return buildFallback(state, mode, message);
+    return buildFallback(state, mode, message, { mediaAttached: Boolean(options?.attachment) });
   }
 
   const isDashScopeProvider = isDashScope(baseUrl);
+  const hasAttachment = Boolean(options?.attachment);
   const controller = new AbortController();
   const timeoutMs = options?.strict ? 60000 : 45000;
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -433,11 +504,35 @@ async function callOpenAiCompatible(
     };
     const temperature = 0.35;
     const systemPrompt = buildSystemPrompt(mode, settings);
-    const userPrompt = buildUserContext(state, mode, message);
+    const userPrompt = buildUserContext(state, mode, message, { attachment: options?.attachment });
     const dashScopeCompatFields = isDashScopeProvider ? { enable_thinking: false } : {};
 
+    const multimediaContent =
+      options?.attachment && mode === "guidance"
+        ? [
+            options.attachment.kind === "image"
+              ? {
+                  type: "image_url",
+                  image_url: {
+                    url: options.attachment.dataUrl,
+                  },
+                }
+              : {
+                  type: "video_url",
+                  video_url: {
+                    url: options.attachment.dataUrl,
+                  },
+                },
+            {
+              type: "text",
+              text: userPrompt,
+            },
+          ]
+        : null;
+
+    const requestProtocol = hasAttachment ? "openai-chat-completions" : protocol;
     const response =
-      protocol === "openai-responses"
+      requestProtocol === "openai-responses"
         ? await fetch(`${trimBaseUrl(baseUrl)}/responses`, {
             method: "POST",
             headers,
@@ -465,7 +560,7 @@ async function callOpenAiCompatible(
                 },
                 {
                   role: "user",
-                  content: userPrompt,
+                  content: multimediaContent ?? userPrompt,
                 },
               ],
               ...dashScopeCompatFields,
@@ -478,22 +573,13 @@ async function callOpenAiCompatible(
       throw new Error(parseProviderError(response.status, bodyText));
     }
 
-    const json = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-      output_text?: string;
-      output?: Array<{
-        content?: Array<{
-          type?: string;
-          text?: string;
-        }>;
-      }>;
-    };
+    const json = (await response.json()) as ChatCompletionsJson & ResponsesApiJson;
     const content =
-      protocol === "openai-responses"
+      requestProtocol === "openai-responses"
         ? extractResponsesText(json)
-        : json.choices?.[0]?.message?.content;
+        : extractChatText(json);
     if (!content) {
-      throw new Error(`模型接口已返回响应，但 ${protocol} 结果中没有可读取的文本内容。`);
+      throw new Error(`模型接口已返回响应，但 ${requestProtocol} 结果中没有可读取的文本内容。`);
     }
 
     let parsed: LlmResponsePayload;
@@ -502,7 +588,8 @@ async function callOpenAiCompatible(
     } catch {
       throw new Error("模型已返回内容，但不是合法 JSON。请检查模型是否遵守 JSON 输出要求。");
     }
-    return normalizeResponse(parsed, mode, providerLabel);
+    const providerLabelForRequest = hasAttachment ? `openai-chat-completions / ${model}` : providerLabel;
+    return normalizeResponse(parsed, mode, providerLabelForRequest);
   } catch (error) {
     throw parseAbortError(error, timeoutMs);
   } finally {
@@ -515,12 +602,18 @@ export async function runAssistant(request: AssistantRequest): Promise<Assistant
   const settings = normalizeSettings();
 
   try {
-    return await callOpenAiCompatible(state, request.mode, request.message, settings);
+    return await callOpenAiCompatible(state, request.mode, request.message, settings, {
+      attachment: request.attachment,
+    });
   } catch {
-    const fallback = buildFallback(state, request.mode, request.message);
+    const fallback = buildFallback(state, request.mode, request.message, {
+      mediaAttached: Boolean(request.attachment),
+    });
     return {
       ...fallback,
-      disclaimer: "外部模型请求失败，当前回退为本地规则生成结果。请检查管理员配置的 Base URL、API Key 与模型名。",
+      disclaimer: request.attachment
+        ? "外部模型未能完成对你上传媒体的分析，当前仅回退为通用规则生成结果。请检查管理员配置的 Base URL、API Key、模型名和多模态能力。"
+        : "外部模型请求失败，当前回退为本地规则生成结果。请检查管理员配置的 Base URL、API Key 与模型名。",
     };
   }
 }
@@ -546,6 +639,55 @@ export async function testModelConnection(overrides?: Partial<AssistantSettings>
     return {
       ok: false,
       message: error instanceof Error ? error.message : "模型测试失败。",
+    };
+  }
+}
+
+export async function testMultimodalConnection(overrides?: Partial<AssistantSettings>) {
+  const settings = normalizeSettings(overrides);
+  const state = getDemoState("user-admin-root", "member-chen");
+
+  try {
+    const imageResult = await callOpenAiCompatible(
+      state,
+      "guidance",
+      multimodalTestSamples.image.prompt,
+      settings,
+      {
+        strict: true,
+        attachment: {
+          kind: multimodalTestSamples.image.kind,
+          mimeType: multimodalTestSamples.image.mimeType,
+          dataUrl: multimodalTestSamples.image.dataUrl,
+          filename: multimodalTestSamples.image.filename,
+        },
+      },
+    );
+
+    const videoResult = await callOpenAiCompatible(
+      state,
+      "guidance",
+      multimodalTestSamples.video.prompt,
+      settings,
+      {
+        strict: true,
+        attachment: {
+          kind: multimodalTestSamples.video.kind,
+          mimeType: multimodalTestSamples.video.mimeType,
+          dataUrl: multimodalTestSamples.video.dataUrl,
+          filename: multimodalTestSamples.video.filename,
+        },
+      },
+    );
+
+    return {
+      ok: true,
+      message: `多模态测试成功：图片与视频链路均已连通。当前提供方为 ${imageResult.providerLabel}。`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "多模态模型测试失败。",
     };
   }
 }
