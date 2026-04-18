@@ -20,8 +20,8 @@ export function SidebarNav({ currentPath }: SidebarNavProps) {
     <aside className="sidebar">
       <div className="brand-block">
         <p className="brand-kicker">PulseLab Studio</p>
-        <strong>Member Experience</strong>
-        <span>会员训练服务界面</span>
+        <strong>Training Space</strong>
+        <span>你的训练与恢复安排</span>
       </div>
 
       <div className="profile-card">
@@ -44,7 +44,7 @@ export function SidebarNav({ currentPath }: SidebarNavProps) {
       <div className="sidebar-footer">
         <span className="mini-label">穿戴设备</span>
         <strong>{memberProfile.wearablePermissionStatus}</strong>
-        <p>当前身份通过基础登录态进入，不再依赖手动角色切换。</p>
+        <p>接入后会用于补充训练记录与恢复判断。</p>
         <button
           className="button-tertiary"
           disabled={isSaving}

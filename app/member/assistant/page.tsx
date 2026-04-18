@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MainLayout } from "@/components/main-layout";
+import { Reveal } from "@/components/reveal";
 import { useDemo } from "@/lib/demo-store";
 import type { AssistantMode, AssistantResponse } from "@/lib/demo-types";
 import { isAssistantReady } from "@/lib/model-settings";
@@ -28,12 +29,20 @@ const modeLabels: Record<AssistantMode, string> = {
   review: "复盘更新",
 };
 
+const applyLabels: Record<AssistantMode, string> = {
+  plan: "当前计划",
+  guidance: "动作指导",
+  review: "复盘更新",
+};
+
 const initialMode: AssistantMode = "plan";
 
 export default function MemberAssistantPage() {
   const router = useRouter();
   const {
-    state: { session, memberProfile, modelSettings },
+    state: { session, memberProfile, modelSettings, appliedAssistantOutputs },
+    applyAssistantResult,
+    isSaving,
     isBootstrapped,
   } = useDemo();
   const [mode, setMode] = useState<AssistantMode>(initialMode);
@@ -41,6 +50,7 @@ export default function MemberAssistantPage() {
   const [response, setResponse] = useState<AssistantResponse | null>(null);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
 
   useEffect(() => {
     if (!isBootstrapped) return;
@@ -49,6 +59,7 @@ export default function MemberAssistantPage() {
   }, [isBootstrapped, session.isAuthenticated, session.role, router]);
 
   const assistantReady = useMemo(() => isAssistantReady(modelSettings), [modelSettings]);
+  const appliedOutput = appliedAssistantOutputs[mode];
 
   useEffect(() => {
     setMessage(presets[mode][0]);
@@ -78,105 +89,99 @@ export default function MemberAssistantPage() {
     }
   }
 
+  async function handleApplyResult() {
+    if (!response) return;
+    setIsApplying(true);
+    setError("");
+    try {
+      await applyAssistantResult(mode, response);
+      window.alert(`已应用到${applyLabels[mode]}中。`);
+    } catch (applyError) {
+      setError(applyError instanceof Error ? applyError.message : "应用结果失败");
+    } finally {
+      setIsApplying(false);
+    }
+  }
+
   return (
     <MainLayout currentPath="/member/assistant">
-      <section className="page-intro member-page-intro">
-        <div>
-          <p className="eyebrow">PulseLab AI Assistant</p>
-          <h1>会员智能健身助理</h1>
-          <p>这里是计划生成、简化饮食建议、动作指导和复盘更新的统一入口。管理员配置好模型后，这里会直接走真实 LLM；未配置时先用本地规则结果保证 demo 可用。</p>
-        </div>
-        <div className="intro-badges">
-          <span className={assistantReady ? "badge-accent" : "badge-neutral"}>{assistantReady ? "已接入外部模型" : "当前为本地规则模式"}</span>
-          <span className="badge-outline">{memberProfile.goalLabel}</span>
-        </div>
-      </section>
-
-      <section className="member-highlight-grid">
-        <article className="panel spotlight-card">
-          <p className="eyebrow">当前画像</p>
-          <h2>{memberProfile.memberName}</h2>
-          <p>{memberProfile.locationName} · {memberProfile.coachName}</p>
-          <div className="hero-chip-row">
-            <span className="hero-chip">{memberProfile.trainingLevel}</span>
-            <span className="hero-chip">{memberProfile.equipmentAccess}</span>
-            <span className="hero-chip">{memberProfile.trainingDays} 天 / 周</span>
+      <Reveal>
+        <section className="page-intro member-page-intro">
+          <div>
+            <p className="eyebrow">智能助理</p>
+            <h1>让 AI 先出建议，你再决定是否采用</h1>
+            <p>这里不直接改动你的页面内容。先生成，再确认，再应用。</p>
           </div>
-        </article>
-        <article className="panel mood-card accent-panel">
-          <p className="eyebrow">使用方式</p>
-          <h2>先选场景，再发起请求</h2>
-          <p>计划生成会产出结构化训练日与简化饮食建议；动作指导会给风险边界和引用；复盘会产出下周调整逻辑。</p>
-        </article>
-      </section>
-
-      <section className="content-grid">
-        <article className="panel">
-          <div className="panel-header">
-            <div><p className="eyebrow">场景切换</p><h2>让 AI 处理不同任务</h2></div>
+          <div className="intro-badges">
+            <span className={assistantReady ? "badge-accent" : "badge-neutral"}>{assistantReady ? "✨ 已准备好" : "🧩 基础模式"}</span>
+            <span className="badge-outline">🎯 {memberProfile.goalLabel}</span>
           </div>
-          <div className="segmented">
-            {(["plan", "guidance", "review"] as AssistantMode[]).map((item) => (
-              <button
-                className={item === mode ? "segment segment-active" : "segment"}
-                key={item}
-                onClick={() => setMode(item)}
-                type="button"
-              >
-                {modeLabels[item]}
-              </button>
-            ))}
+        </section>
+      </Reveal>
+
+      <Reveal delay={80}>
+        <section className="panel member-section">
+          <div className="icon-stat-grid">
+            <article className="icon-stat-card"><span className="emoji-mark" aria-hidden="true">🎯</span><div><span>当前目标</span><strong>{memberProfile.goalLabel}</strong></div></article>
+            <article className="icon-stat-card"><span className="emoji-mark" aria-hidden="true">🗓️</span><div><span>训练频率</span><strong>{memberProfile.trainingDays} 天 / 周</strong></div></article>
+            <article className="icon-stat-card"><span className="emoji-mark" aria-hidden="true">🏟️</span><div><span>训练条件</span><strong>{memberProfile.equipmentAccess}</strong></div></article>
+            <article className="icon-stat-card"><span className="emoji-mark" aria-hidden="true">💾</span><div><span>已保存结果</span><strong>{appliedOutput ? "已有内容" : "暂未保存"}</strong></div></article>
           </div>
+        </section>
+      </Reveal>
 
-          <div className="preset-row">
-            {presets[mode].map((preset) => (
-              <button className="hero-chip preset-chip" key={preset} onClick={() => setMessage(preset)} type="button">
-                {preset}
-              </button>
-            ))}
-          </div>
-
-          <label className="field field-wide">
-            <span>你的问题</span>
-            <textarea
-              rows={7}
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-            />
-          </label>
-
-          {error ? <div className="empty-state">{error}</div> : null}
-
-          <div className="submit-row">
-            <button className="button-primary" disabled={isSubmitting || !message.trim()} onClick={() => void submitAssistantRequest()} type="button">
-              {isSubmitting ? "生成中..." : `生成${modeLabels[mode]}建议`}
-            </button>
-            <span className="helper-text">真实模型参数在管理员的“模型配置”页面填写。</span>
-          </div>
-        </article>
-
-        <article className="panel media-card">
-          <div className="media-frame">
-            <div className="media-placeholder">
-              <span className="mini-label">AI 助理定位</span>
-              <strong>Structured Fitness Agent</strong>
-              <p>不是普通聊天机器人，而是围绕计划、执行、复盘持续产出结果的健身助理。</p>
-            </div>
-          </div>
-        </article>
-      </section>
-
-      <section className="panel">
+      <Reveal delay={140}>
+        <section className="panel member-section">
         <div className="panel-header">
-          <div><p className="eyebrow">结果面板</p><h2>{response?.title ?? "等待生成结果"}</h2></div>
-          {response ? <span className={response.usedFallback ? "badge-neutral" : "badge-accent"}>{response.providerLabel}</span> : null}
+          <div><p className="eyebrow">选择场景</p><h2>让助理处理当前需求</h2></div>
+        </div>
+        <div className="segmented">
+          {(["plan", "guidance", "review"] as AssistantMode[]).map((item) => (
+            <button
+              className={item === mode ? "segment segment-active" : "segment"}
+              key={item}
+              onClick={() => setMode(item)}
+              type="button"
+            >
+              {modeLabels[item]}
+            </button>
+          ))}
+        </div>
+
+        <div className="preset-row">
+          {presets[mode].map((preset) => (
+            <button className="hero-chip preset-chip" key={preset} onClick={() => setMessage(preset)} type="button">
+              {preset}
+            </button>
+          ))}
+        </div>
+
+        <label className="field field-wide">
+          <span>输入你的问题</span>
+          <textarea rows={6} value={message} onChange={(event) => setMessage(event.target.value)} />
+        </label>
+
+        {error ? <div className="empty-state">{error}</div> : null}
+
+        <div className="submit-row">
+          <button className="button-primary" disabled={isSubmitting || !message.trim()} onClick={() => void submitAssistantRequest()} type="button">
+            {isSubmitting ? "生成中..." : `生成${modeLabels[mode]}建议`}
+          </button>
+          <span className="helper-text">生成结果只在你确认后才会保存到对应页面。</span>
+        </div>
+        </section>
+      </Reveal>
+
+      <Reveal delay={200}>
+        <section className="panel member-section">
+        <div className="panel-header">
+          <div><p className="eyebrow">生成结果</p><h2>{response?.title ?? "等待生成结果"}</h2></div>
         </div>
 
         {response ? (
           <div className="assistant-results">
             <article className="assistant-summary-card">
               <p>{response.summary}</p>
-              <span className="helper-text">{response.disclaimer}</span>
             </article>
 
             {response.highlights.length ? (
@@ -197,101 +202,104 @@ export default function MemberAssistantPage() {
                     <div>{day.duration}</div>
                     <div>{day.intensity}</div>
                     <div>{day.note}</div>
-                    <div className="row-actions"><span className="badge-outline">AI 草案</span></div>
+                    <div className="row-actions"><span className="badge-outline">建议</span></div>
                   </div>
                 ))}
               </div>
             ) : null}
 
-            <div className="assistant-section-grid">
+            <div className="member-reading-flow">
               {response.nutritionTips.length ? (
-                <article className="panel">
-                  <div className="panel-header"><div><p className="eyebrow">饮食建议</p><h2>简化可执行规则</h2></div></div>
-                  <div className="bullet-stack">
-                    {response.nutritionTips.map((item) => (
-                      <div className="bullet-card bullet-card-lift" key={item}><p>{item}</p></div>
-                    ))}
-                  </div>
-                </article>
-              ) : null}
-
-              {response.guidancePoints.length ? (
-                <article className="panel">
-                  <div className="panel-header"><div><p className="eyebrow">动作指导</p><h2>执行重点</h2></div></div>
-                  <div className="bullet-stack">
-                    {response.guidancePoints.map((item) => (
-                      <div className="bullet-card bullet-card-lift" key={item}><p>{item}</p></div>
-                    ))}
-                  </div>
-                </article>
-              ) : null}
-
-              {response.reviewInsights.length ? (
-                <article className="panel">
-                  <div className="panel-header"><div><p className="eyebrow">复盘结论</p><h2>训练调整逻辑</h2></div></div>
-                  <div className="bullet-stack">
-                    {response.reviewInsights.map((item) => (
-                      <div className="bullet-card bullet-card-lift" key={item}><p>{item}</p></div>
-                    ))}
-                  </div>
-                </article>
-              ) : null}
-
-              {response.recoveryActions.length ? (
-                <article className="panel">
-                  <div className="panel-header"><div><p className="eyebrow">恢复与执行</p><h2>接下来怎么做</h2></div></div>
-                  <div className="bullet-stack">
-                    {response.recoveryActions.map((item) => (
-                      <div className="bullet-card bullet-card-lift" key={item}><p>{item}</p></div>
-                    ))}
-                  </div>
-                </article>
-              ) : null}
-            </div>
-
-            <div className="assistant-section-grid">
-              {response.safetyFlags.length ? (
-                <article className="panel risk-panel">
-                  <div className="panel-header"><div><p className="eyebrow">风险边界</p><h2>必须保守处理</h2></div></div>
-                  <div className="bullet-stack">
-                    {response.safetyFlags.map((item) => (
-                      <div className="bullet-card risk-card" key={item}><p>{item}</p></div>
-                    ))}
-                  </div>
-                </article>
-              ) : null}
-
-              {response.citations.length ? (
-                <article className="panel">
-                  <div className="panel-header"><div><p className="eyebrow">引用</p><h2>可解释来源</h2></div></div>
-                  <div className="citation-list">
-                    {response.citations.map((item) => (
-                      <article className="citation-card citation-card-bright" key={`${item.source}-${item.title}`}>
-                        <strong>{item.title}</strong>
-                        <p>{item.note}</p>
-                        <span>{item.source}</span>
-                      </article>
-                    ))}
-                  </div>
-                </article>
-              ) : null}
-            </div>
-
-            {response.nextSteps.length ? (
-              <article className="panel">
-                <div className="panel-header"><div><p className="eyebrow">下一步</p><h2>建议动作</h2></div></div>
                 <div className="bullet-stack">
-                  {response.nextSteps.map((item) => (
+                  <div className="section-caption">饮食建议</div>
+                  {response.nutritionTips.map((item) => (
                     <div className="bullet-card bullet-card-lift" key={item}><p>{item}</p></div>
                   ))}
                 </div>
-              </article>
-            ) : null}
+              ) : null}
+
+              {response.guidancePoints.length ? (
+                <div className="bullet-stack">
+                  <div className="section-caption">动作要点</div>
+                  {response.guidancePoints.map((item) => (
+                    <div className="bullet-card bullet-card-lift" key={item}><p>{item}</p></div>
+                  ))}
+                </div>
+              ) : null}
+
+              {response.reviewInsights.length ? (
+                <div className="bullet-stack">
+                  <div className="section-caption">复盘建议</div>
+                  {response.reviewInsights.map((item) => (
+                    <div className="bullet-card bullet-card-lift" key={item}><p>{item}</p></div>
+                  ))}
+                </div>
+              ) : null}
+
+              {response.recoveryActions.length ? (
+                <div className="bullet-stack">
+                  <div className="section-caption">接下来</div>
+                  {response.recoveryActions.map((item) => (
+                    <div className="bullet-card bullet-card-lift" key={item}><p>{item}</p></div>
+                  ))}
+                </div>
+              ) : null}
+
+              {response.safetyFlags.length ? (
+                <div className="bullet-stack">
+                  <div className="section-caption">风险提醒</div>
+                  {response.safetyFlags.map((item) => (
+                    <div className="bullet-card risk-card" key={item}><p>{item}</p></div>
+                  ))}
+                </div>
+              ) : null}
+
+              {response.citations.length ? (
+                <div className="citation-list">
+                  <div className="section-caption">参考来源</div>
+                  {response.citations.map((item) => (
+                    <article className="citation-card citation-card-bright" key={`${item.source}-${item.title}`}>
+                      <strong>{item.title}</strong>
+                      <p>{item.note}</p>
+                      <span>{item.source}</span>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="submit-row">
+              <button className="button-primary" disabled={isApplying || isSaving} onClick={() => void handleApplyResult()} type="button">
+                {isApplying ? "应用中..." : `应用到${applyLabels[mode]}中`}
+              </button>
+              <span className="helper-text">
+                {mode === "plan"
+                  ? "应用后会覆盖当前周计划。"
+                  : mode === "guidance"
+                    ? "应用后会保存为当前指导卡片。"
+                    : "应用后会保存为当前复盘建议。"}
+              </span>
+            </div>
           </div>
         ) : (
-          <div className="empty-state">先选择场景并提交问题，AI 助理会在这里返回结构化结果。</div>
+          <div className="empty-state">先输入你的问题，再生成本次建议。</div>
         )}
-      </section>
+        </section>
+      </Reveal>
+
+      {appliedOutput ? (
+        <Reveal delay={260}>
+          <section className="panel member-section">
+          <div className="panel-header">
+            <div><p className="eyebrow">已保存内容</p><h2>当前已应用版本</h2></div>
+          </div>
+          <article className="assistant-summary-card">
+            <p>{appliedOutput.summary}</p>
+            <span className="helper-text">保存时间：{appliedOutput.appliedAt.replace("T", " ").slice(0, 16)}</span>
+          </article>
+          </section>
+        </Reveal>
+      ) : null}
     </MainLayout>
   );
 }

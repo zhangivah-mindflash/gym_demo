@@ -4,6 +4,8 @@ import Database from "better-sqlite3";
 import { demoAccounts, initialDemoState } from "@/lib/mock-data";
 import { defaultModelSettings, withModelSettingMeta } from "@/lib/model-settings";
 import type {
+  AppliedAssistantOutput,
+  AssistantResponse,
   CoachEdit,
   CoachQueueItem,
   DemoState,
@@ -183,6 +185,14 @@ function initialize(db: BetterSqlite) {
       owner TEXT NOT NULL,
       status TEXT NOT NULL,
       created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS assistant_outputs (
+      id TEXT PRIMARY KEY,
+      member_id TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      applied_at TEXT NOT NULL
     );
   `);
 
@@ -697,6 +707,20 @@ function defaultDemoState(): DemoState {
   };
 }
 
+function mapAppliedAssistantOutput(row?: { payload: string; applied_at: string } | undefined): AppliedAssistantOutput | null {
+  if (!row) return null;
+
+  try {
+    const payload = JSON.parse(row.payload) as AssistantResponse;
+    return {
+      ...payload,
+      appliedAt: row.applied_at,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function getDemoState(userId?: string | null, selectedMemberId?: string | null): DemoState {
   const db = getDb();
   const user = getUserById(userId);
@@ -732,6 +756,12 @@ export function getDemoState(userId?: string | null, selectedMemberId?: string |
   const queue = accessibleQueue(user);
   const latestReview = reviews.find((item) => item.memberId === activeMemberId) ?? initialDemoState.review;
   const allowSecretValue = user.role === "admin";
+  const appliedRows = db.prepare("SELECT mode, payload, applied_at FROM assistant_outputs WHERE member_id = ?").all(activeMemberId) as Array<{
+    mode: string;
+    payload: string;
+    applied_at: string;
+  }>;
+  const appliedMap = new Map(appliedRows.map((row) => [row.mode, row]));
 
   return {
     session: mapSession(user),
@@ -820,6 +850,11 @@ export function getDemoState(userId?: string | null, selectedMemberId?: string |
     review: latestReview,
     members,
     reviews,
+    appliedAssistantOutputs: {
+      plan: mapAppliedAssistantOutput(appliedMap.get("plan")),
+      guidance: mapAppliedAssistantOutput(appliedMap.get("guidance")),
+      review: mapAppliedAssistantOutput(appliedMap.get("review")),
+    },
   };
 }
 
@@ -1043,6 +1078,69 @@ export function updateModelSetting(
   const db = getDb();
   db.prepare("UPDATE model_settings SET value = ? WHERE id = ?").run(value, id);
   return getDemoState(userId, selectedMemberId);
+}
+
+export function applyAssistantResult(
+  userId: string | null | undefined,
+  payload: { memberId: string; mode: "plan" | "guidance" | "review"; response: AssistantResponse },
+) {
+  const session = getUserById(userId);
+  if (!session) {
+    return getDemoState(userId, payload.memberId);
+  }
+
+  const db = getDb();
+  const appliedAt = new Date().toISOString();
+
+  const tx = db.transaction(() => {
+    db.prepare("DELETE FROM assistant_outputs WHERE member_id = ? AND mode = ?").run(payload.memberId, payload.mode);
+    db.prepare(`
+      INSERT INTO assistant_outputs (id, member_id, mode, payload, applied_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(`assistant-${payload.mode}-${Date.now()}`, payload.memberId, payload.mode, JSON.stringify(payload.response), appliedAt);
+
+    if (payload.mode === "plan" && payload.response.trainingPlan.length) {
+      const existingDays = db.prepare("SELECT id, day_label FROM plan_days WHERE member_id = ? ORDER BY day_label ASC").all(payload.memberId) as Array<{
+        id: string;
+        day_label: string;
+      }>;
+
+      payload.response.trainingPlan.slice(0, existingDays.length).forEach((day, index) => {
+        const target = existingDays[index];
+        if (!target) return;
+
+        db.prepare(`
+          UPDATE plan_days
+          SET day_label = ?, focus = ?, duration = ?, intensity = ?, coach_note = ?, completed = 0
+          WHERE id = ?
+        `).run(day.dayLabel, day.focus, day.duration, day.intensity, day.note, target.id);
+      });
+
+      db.prepare(`
+        UPDATE members
+        SET last_coach_edit_reason = ?, plan_version = plan_version + 1, updated_at = ?
+        WHERE id = ?
+      `).run("已应用智能助理生成的训练计划。", appliedAt, payload.memberId);
+    }
+
+    if (payload.mode === "review") {
+      const nextAdjustment =
+        payload.response.reviewInsights[0] ??
+        payload.response.recoveryActions[0] ??
+        payload.response.summary;
+
+      db.prepare(`
+        UPDATE reviews
+        SET next_adjustment = ?
+        WHERE id = (
+          SELECT id FROM reviews WHERE member_id = ? ORDER BY created_at DESC LIMIT 1
+        )
+      `).run(nextAdjustment, payload.memberId);
+    }
+  });
+
+  tx();
+  return getDemoState(userId, payload.memberId);
 }
 
 export function getModelSettingsMap() {

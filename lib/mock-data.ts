@@ -2,11 +2,11 @@ import type { DemoState } from "@/lib/demo-types";
 import { defaultModelSettings } from "@/lib/model-settings";
 
 export const memberNavigation = [
-  { href: "/member", label: "首页", description: "会员驾驶舱" },
-  { href: "/member/assistant", label: "AI 助理", description: "计划、饮食、动作、复盘" },
-  { href: "/member/plan", label: "我的计划", description: "结构化计划与完成打卡" },
-  { href: "/member/guidance", label: "动作指导", description: "检索增强与风险提示" },
-  { href: "/member/review", label: "复盘", description: "训练反馈与计划更新" },
+  { href: "/member", label: "首页", description: "本周安排与重点" },
+  { href: "/member/assistant", label: "AI 助理", description: "获取训练与恢复建议" },
+  { href: "/member/plan", label: "我的计划", description: "查看本周计划并打卡" },
+  { href: "/member/guidance", label: "动作指导", description: "查看动作要点与提醒" },
+  { href: "/member/review", label: "复盘", description: "提交反馈并跟进调整" },
 ];
 
 export const coachNavigation = [
@@ -350,6 +350,11 @@ export const initialDemoState: DemoState = {
       createdAt: "2026-04-15T10:00:00.000Z",
     },
   ],
+  appliedAssistantOutputs: {
+    plan: null,
+    guidance: null,
+    review: null,
+  },
 };
 
 export const demoAccounts = [
@@ -439,3 +444,90 @@ export const guidanceSignals = [
     ],
   },
 ];
+
+export const guidanceLibrary = [
+  {
+    slug: "dumbbell-rdl",
+    emoji: "🏋️",
+    exercise: "哑铃罗马尼亚硬拉",
+    target: "后链 / 臀腿",
+    focus: "髋主导与脊柱中立",
+    difficulty: "进阶",
+    coachNote: "先稳定髋主导，再考虑加重。",
+    sourceLabel: "知识库预置",
+    summary: "适合提升后链发力与髋铰链控制，训练时优先关注路径贴腿和下放节奏。",
+    order: ["低强度单车 5 分钟", "髋铰链练习 2 组", "主训练 3-4 组", "腘绳肌轻拉伸 + 呼吸恢复"],
+    cues: [
+      "双脚与髋同宽，肩胛轻收，哑铃贴近身体。",
+      "下放时先向后推髋，再保持躯干稳定。",
+      "回程时脚掌稳压地面，避免用下背猛拉。",
+    ],
+    warnings: [
+      "出现锐痛、麻木或症状放射时应立即停止。",
+      "下背控制不足时先减重或改用更稳的替代动作。",
+    ],
+  },
+  {
+    slug: "goblet-squat",
+    emoji: "🦵",
+    exercise: "高杯深蹲",
+    target: "腿部 / 核心",
+    focus: "下蹲路径与躯干稳定",
+    difficulty: "新手友好",
+    coachNote: "先把下蹲深度和膝盖轨迹做稳。",
+    sourceLabel: "知识库预置",
+    summary: "适合作为腿部基础动作，帮助建立蹲的节奏、深度和核心支撑。",
+    order: ["踝髋热身 4 分钟", "体重深蹲 2 组", "高杯深蹲 3-4 组", "臀桥或呼吸放松"],
+    cues: [
+      "抱铃靠近胸前，保持肘部自然下垂。",
+      "下蹲时脚掌均匀发力，膝盖方向跟随脚尖。",
+      "起身时先稳住核心，再推地站起。",
+    ],
+    warnings: [
+      "膝前疼痛明显时应缩短动作幅度并告知教练。",
+      "如果跟腱或踝受限明显，优先做热身和高度调整。",
+    ],
+  },
+  {
+    slug: "incline-dumbbell-press",
+    emoji: "💪",
+    exercise: "上斜哑铃卧推",
+    target: "胸肩前束 / 上肢推",
+    focus: "肩胛稳定与推举轨迹",
+    difficulty: "进阶",
+    coachNote: "肩前侧有压迫感时，先减重并缩短幅度。",
+    sourceLabel: "知识库预置",
+    summary: "用于上肢推动作强化，重点是肩胛稳定、手腕叠线和下降控制。",
+    order: ["弹力带肩部热身", "空手推举轨迹预演", "主训练 3-4 组", "胸肩轻放松"],
+    cues: [
+      "起始位肩胛微收，手腕保持正直。",
+      "下放到上臂接近与地面平行即可，不必过度下压。",
+      "推起时让哑铃略向中线靠拢，避免耸肩。",
+    ],
+    warnings: [
+      "肩前侧刺痛或不稳定感明显时应停止该动作。",
+      "疲劳末期轨迹漂移时优先结束该组，不强行追加次数。",
+    ],
+  },
+  {
+    slug: "split-squat",
+    emoji: "⚖️",
+    exercise: "分腿蹲",
+    target: "单侧稳定 / 臀腿",
+    focus: "骨盆控制与前脚发力",
+    difficulty: "中级",
+    coachNote: "速度宁慢，先把单侧控制做好。",
+    sourceLabel: "知识库预置",
+    summary: "适合提升单侧稳定与下肢控制，对跑跳基础和体态都很有帮助。",
+    order: ["髋屈肌热身", "徒手分腿蹲 2 组", "持重训练 3 组", "股四头肌与臀部放松"],
+    cues: [
+      "前脚踩稳，骨盆保持正向。",
+      "下放时后膝自然向下，不急着追求深度。",
+      "起身时前脚发力，避免身体前冲。",
+    ],
+    warnings: [
+      "膝盖不适时减少动作幅度并降低负荷。",
+      "平衡明显不足时先扶固定物训练。",
+    ],
+  },
+] as const;

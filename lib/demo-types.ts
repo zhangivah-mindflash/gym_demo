@@ -119,6 +119,10 @@ export type AssistantResponse = {
   usedFallback: boolean;
 };
 
+export type AppliedAssistantOutput = AssistantResponse & {
+  appliedAt: string;
+};
+
 export type CoachQueueItem = {
   id: string;
   memberId: string;
@@ -178,4 +182,9 @@ export type DemoState = {
   review: ReviewRecord;
   members: MemberListItem[];
   reviews: ReviewRecord[];
+  appliedAssistantOutputs: {
+    plan: AppliedAssistantOutput | null;
+    guidance: AppliedAssistantOutput | null;
+    review: AppliedAssistantOutput | null;
+  };
 };

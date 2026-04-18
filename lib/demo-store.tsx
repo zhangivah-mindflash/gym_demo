@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { initialDemoState } from "@/lib/mock-data";
-import type { DemoState, MemberProfile } from "@/lib/demo-types";
+import type { AssistantMode, AssistantResponse, DemoState, MemberProfile } from "@/lib/demo-types";
 
 type CoachEditPayload = {
   memberId: string;
@@ -34,6 +34,7 @@ type DemoContextValue = {
   toggleKnowledgeBase: (id: string) => Promise<void>;
   updateKnowledgeBase: (payload: { id: string; name: string; description: string; category: string; documents: number; enabled: boolean }) => Promise<void>;
   updateModelSetting: (id: string, value: string) => Promise<void>;
+  applyAssistantResult: (mode: AssistantMode, response: AssistantResponse) => Promise<void>;
   selectMember: (memberId: string) => Promise<void>;
   refresh: () => Promise<void>;
 };
@@ -126,6 +127,8 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       toggleKnowledgeBase: async (id) => runMutation("toggle_knowledge_base", { id }),
       updateKnowledgeBase: async (payload) => runMutation("update_knowledge_base", payload),
       updateModelSetting: async (id, value) => runMutation("update_model_setting", { id, value }),
+      applyAssistantResult: async (mode, response) =>
+        runMutation("apply_assistant_result", { mode, response, memberId: state.memberProfile.id }),
       selectMember: async (memberId) => runMutation("select_member", { memberId }),
       refresh,
     }),

@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
+  applyAssistantResult,
   applyCoachEdit,
   getDemoState,
   saveProfile,
@@ -12,7 +13,7 @@ import {
   updateModelSetting,
 } from "@/lib/server/demo-db";
 import { SELECTED_MEMBER_COOKIE, SESSION_COOKIE } from "@/lib/server/auth";
-import type { MemberProfile } from "@/lib/demo-types";
+import type { AssistantResponse, MemberProfile } from "@/lib/demo-types";
 
 export const runtime = "nodejs";
 
@@ -89,6 +90,15 @@ export async function POST(request: Request) {
     case "update_model_setting":
       return NextResponse.json({
         data: updateModelSetting(userId, String(body.id), String(body.value), memberId),
+      });
+
+    case "apply_assistant_result":
+      return NextResponse.json({
+        data: applyAssistantResult(userId, {
+          memberId: String(body.memberId),
+          mode: String(body.mode) as "plan" | "guidance" | "review",
+          response: body.response as AssistantResponse,
+        }),
       });
 
     default:

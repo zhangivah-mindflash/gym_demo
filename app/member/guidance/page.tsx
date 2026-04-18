@@ -1,21 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MainLayout } from "@/components/main-layout";
-import { guidanceBase, guidanceSignals } from "@/lib/mock-data";
+import { Reveal } from "@/components/reveal";
+import { guidanceLibrary } from "@/lib/mock-data";
 import { useDemo } from "@/lib/demo-store";
+
+const filters = ["全部", "后链", "腿部", "上肢推", "稳定"] as const;
 
 export default function MemberGuidancePage() {
   const {
-    state: { session, knowledgeBase },
+    state: { session, appliedAssistantOutputs },
     isBootstrapped,
   } = useDemo();
   const router = useRouter();
-  const [signalId, setSignalId] = useState(guidanceSignals[0].id);
-  const signal = guidanceSignals.find((item) => item.id === signalId) ?? guidanceSignals[0];
-  const enabledBuckets = new Set(knowledgeBase.filter((entry) => entry.enabled).map((entry) => entry.id));
-  const citations = guidanceBase.citations.filter((citation) => enabledBuckets.has(citation.bucket));
+  const [activeFilter, setActiveFilter] = useState<(typeof filters)[number]>("全部");
 
   useEffect(() => {
     if (!isBootstrapped) return;
@@ -23,82 +24,135 @@ export default function MemberGuidancePage() {
     if (session.role && session.role !== "member") router.replace(`/${session.role}`);
   }, [isBootstrapped, session.isAuthenticated, session.role, router]);
 
+  const galleryItems = useMemo(() => {
+    const baseItems = guidanceLibrary.map((item) => ({
+      slug: item.slug,
+      emoji: item.emoji,
+      title: item.exercise,
+      target: item.target,
+      focus: item.focus,
+      difficulty: item.difficulty,
+      sourceLabel: item.sourceLabel,
+      coachNote: item.coachNote,
+      summary: item.summary,
+      isSaved: false,
+    }));
+
+    const appliedGuidance = appliedAssistantOutputs.guidance;
+    if (!appliedGuidance) return baseItems;
+
+    return [
+      {
+        slug: "saved-guidance",
+        emoji: "✨",
+        title: appliedGuidance.title,
+        target: appliedGuidance.highlights[0] ?? "已保存训练建议",
+        focus: "来自最近一次已应用的 AI 指导",
+        difficulty: "当前版本",
+        sourceLabel: "AI 已保存",
+        coachNote: appliedGuidance.nextSteps[0] ?? "可进入详情继续查看。",
+        summary: appliedGuidance.summary,
+        isSaved: true,
+      },
+      ...baseItems,
+    ];
+  }, [appliedAssistantOutputs.guidance]);
+
+  const filteredItems = galleryItems.filter((item) => {
+    if (activeFilter === "全部") return true;
+    return item.target.includes(activeFilter) || item.focus.includes(activeFilter);
+  });
+
   return (
     <MainLayout currentPath="/member/guidance">
-      <section className="page-intro member-page-intro">
-        <div>
-          <p className="eyebrow">动作指导</p>
-          <h1>{guidanceBase.exercise}</h1>
-          <p>动作指导会直接受后台知识库启停影响，保证 demo 能展示“后台配置影响前台结果”的真实效果。</p>
-        </div>
-        <div className="intro-badges">
-          <span className="badge-outline">可信引用 {citations.length} 条</span>
-          <span className="badge-outline">风险信号 {signal.label}</span>
-        </div>
-      </section>
+      <Reveal>
+        <section className="page-intro member-page-intro">
+          <div>
+            <p className="eyebrow">动作指导</p>
+            <h1>从动作库里直接选你今天要看的内容</h1>
+            <p>先选动作，再进入细节。页面只保留对训练有帮助的信息，不把系统逻辑堆给会员阅读。</p>
+          </div>
+          <div className="intro-badges">
+            <span className="badge-outline">📚 {galleryItems.length} 个可查看动作</span>
+            <span className="badge-outline">✨ {appliedAssistantOutputs.guidance ? "含已保存 AI 指导" : "可叠加 AI 新建议"}</span>
+          </div>
+        </section>
+      </Reveal>
 
-      <section className="member-highlight-grid">
-        <article className="panel media-card">
-          <div className="media-frame">
-            <div className="media-placeholder">
-              <span className="mini-label">动作参考视频</span>
-              <strong>Preview Placeholder</strong>
-              <p>当前平台暂未上传正式视频，这里保留媒体位与播放氛围层。</p>
+      <Reveal delay={80}>
+        <section className="panel member-section">
+          <div className="member-compact-meta">
+            <div>
+              <span>浏览方式</span>
+              <strong>先选动作</strong>
+            </div>
+            <div>
+              <span>详情内容</span>
+              <strong>要点 / 顺序 / 风险</strong>
+            </div>
+            <div>
+              <span>真人建议</span>
+              <strong>保留教练视角</strong>
+            </div>
+            <div>
+              <span>AI 结果</span>
+              <strong>{appliedAssistantOutputs.guidance ? "已并入动作库" : "可随时生成"}</strong>
             </div>
           </div>
-        </article>
-        <article className="panel spotlight-card">
-          <p className="eyebrow">执行原则</p>
-          <h2>先稳定，再加重</h2>
-          <p>{guidanceBase.warmup}</p>
-          <div className="hero-chip-row">
-            <span className="hero-chip">RPE 控制</span>
-            <span className="hero-chip">有风险即降级</span>
-          </div>
-        </article>
-      </section>
+        </section>
+      </Reveal>
 
-      <section className="content-grid">
-        <article className="panel">
-          <div className="panel-header"><div><p className="eyebrow">提问场景</p><h2>模拟不同风险信号</h2></div></div>
-          <div className="segmented">
-            {guidanceSignals.map((item) => (
-              <button className={item.id === signalId ? "segment segment-active" : "segment"} key={item.id} onClick={() => setSignalId(item.id)} type="button">
-                {item.label}
+      <Reveal delay={140}>
+        <section className="panel member-section">
+          <div className="panel-header">
+            <div>
+              <p className="eyebrow">动作选择</p>
+              <h2>挑一个动作开始看</h2>
+            </div>
+            <Link className="button-secondary compact" href="/member/assistant">
+              让 AI 生成新指导
+            </Link>
+          </div>
+          <div className="filter-row">
+            {filters.map((filter) => (
+              <button
+                className={filter === activeFilter ? "segment segment-active" : "segment"}
+                key={filter}
+                onClick={() => setActiveFilter(filter)}
+                type="button"
+              >
+                {filter}
               </button>
             ))}
           </div>
-        </article>
-
-        <article className="panel risk-panel">
-          <div className="panel-header"><div><p className="eyebrow">风险提醒</p><h2>{signal.label}</h2></div></div>
-          <div className="bullet-stack">
-            {signal.risks.map((risk) => (
-              <div className="bullet-card risk-card" key={risk}><p>{risk}</p></div>
+          <div className="guidance-gallery">
+            {filteredItems.map((item, index) => (
+              <Link className={item.isSaved ? "guidance-card guidance-card-featured" : "guidance-card"} href={`/member/guidance/${item.slug}`} key={item.slug}>
+                <div className="guidance-cover">
+                  <span className="guidance-emoji" aria-hidden="true">{item.emoji}</span>
+                  <div className="guidance-cover-meta">
+                    <span className="mini-label">{item.sourceLabel}</span>
+                    <span className="badge-outline">0{index + 1}</span>
+                  </div>
+                </div>
+                <div className="guidance-card-body">
+                  <strong>{item.title}</strong>
+                  <p>{item.summary}</p>
+                  <div className="guidance-tags">
+                    <span>🎯 {item.target}</span>
+                    <span>⚡ {item.focus}</span>
+                    <span>📈 {item.difficulty}</span>
+                  </div>
+                  <div className="guidance-card-footer">
+                    <span>👨‍🏫 {item.coachNote}</span>
+                    <span className="card-link">查看详情</span>
+                  </div>
+                </div>
+              </Link>
             ))}
           </div>
-        </article>
-      </section>
-
-      <section className="content-grid">
-        <article className="panel">
-          <div className="panel-header"><div><p className="eyebrow">动作要点</p><h2>检索增强建议</h2></div></div>
-          <div className="bullet-stack">
-            {guidanceBase.cues.map((cue) => <div className="bullet-card bullet-card-lift" key={cue}><p>{cue}</p></div>)}
-            <div className="bullet-card bullet-card-lift"><strong>热身</strong><p>{guidanceBase.warmup}</p></div>
-            <div className="bullet-card bullet-card-lift"><strong>放松</strong><p>{guidanceBase.cooldown}</p></div>
-          </div>
-        </article>
-
-        <article className="panel">
-          <div className="panel-header"><div><p className="eyebrow">引用来源</p><h2>启用中的知识库</h2></div></div>
-          <div className="citation-list">
-            {citations.map((citation) => (
-              <article className="citation-card citation-card-bright" key={citation.title}><strong>{citation.title}</strong><p>{citation.snippet}</p><span>{citation.source}</span></article>
-            ))}
-          </div>
-        </article>
-      </section>
+        </section>
+      </Reveal>
     </MainLayout>
   );
 }
