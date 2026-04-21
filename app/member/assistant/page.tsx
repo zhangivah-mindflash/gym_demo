@@ -228,6 +228,12 @@ export default function MemberAssistantPage() {
               <article className="assistant-summary-simple">
                 <strong>{response.title}</strong>
                 <p>{response.summary}</p>
+                <p className="assistant-provider">
+                  <span className={response.usedFallback ? "badge-neutral" : "badge-outline"}>
+                    来源：{response.providerLabel}
+                  </span>
+                  {response.disclaimer ? <span className="helper-text">{response.disclaimer}</span> : null}
+                </p>
               </article>
 
               {response.highlights.length ? (
