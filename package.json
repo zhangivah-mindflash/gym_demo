@@ -4,13 +4,12 @@
   "private": true,
   "scripts": {
     "clean": "rm -rf .next tsconfig.tsbuildinfo",
-    "dev": "next dev",
+    "dev": "next dev -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@next/swc-darwin-arm64": "^15.5.15",
     "better-sqlite3": "^12.9.0",
     "next": "^15.3.0",
     "react": "^19.1.0",

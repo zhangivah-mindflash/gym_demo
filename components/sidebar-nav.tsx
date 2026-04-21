@@ -6,9 +6,12 @@ import { useDemo } from "@/lib/demo-store";
 
 type SidebarNavProps = {
   currentPath: string;
+  id?: string;
+  mobileNavOpen?: boolean;
+  onNavigate?: () => void;
 };
 
-export function SidebarNav({ currentPath }: SidebarNavProps) {
+export function SidebarNav({ currentPath, id, mobileNavOpen = false, onNavigate }: SidebarNavProps) {
   const router = useRouter();
   const {
     state: { memberProfile, session },
@@ -17,7 +20,10 @@ export function SidebarNav({ currentPath }: SidebarNavProps) {
   } = useDemo();
 
   return (
-    <aside className="sidebar">
+    <aside
+      className={`sidebar member-sidebar${mobileNavOpen ? " sidebar--open" : ""}`}
+      id={id}
+    >
       <div className="brand-block">
         <p className="brand-kicker">PulseLab Studio</p>
         <strong>Training Space</strong>
@@ -34,7 +40,12 @@ export function SidebarNav({ currentPath }: SidebarNavProps) {
 
       <nav className="nav-list" aria-label="Member">
         {memberNavigation.map((item) => (
-          <a className={item.href === currentPath ? "nav-item nav-item-active" : "nav-item"} href={item.href} key={item.href}>
+          <a
+            className={item.href === currentPath ? "nav-item nav-item-active" : "nav-item"}
+            href={item.href}
+            key={item.href}
+            onClick={() => onNavigate?.()}
+          >
             <span>{item.label}</span>
             <small>{item.description}</small>
           </a>

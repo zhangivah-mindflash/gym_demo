@@ -112,12 +112,12 @@ export default function MemberAssistantPage() {
 
       const json = (await apiResponse.json()) as { data?: AssistantResponse; error?: string };
       if (!apiResponse.ok || !json.data) {
-        throw new Error(json.error ?? "AI 助理请求失败");
+        throw new Error(json.error ?? "助理请求失败");
       }
 
       setResponse(json.data);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "AI 助理请求失败");
+      setError(requestError instanceof Error ? requestError.message : "助理请求失败");
     } finally {
       setIsSubmitting(false);
     }
@@ -140,274 +140,268 @@ export default function MemberAssistantPage() {
   return (
     <MainLayout currentPath="/member/assistant">
       <Reveal>
-        <section className="page-intro member-page-intro">
-          <div>
-            <p className="eyebrow">智能助理</p>
-            <h1>让 AI 先出建议，你再决定是否采用</h1>
-            <p>这里不直接改动你的页面内容。先生成，再确认，再应用。</p>
-          </div>
-          <div className="intro-badges">
-            <span className={assistantReady ? "badge-accent" : "badge-neutral"}>{assistantReady ? "✨ 已准备好" : "🧩 基础模式"}</span>
-            <span className="badge-outline">🎯 {memberProfile.goalLabel}</span>
-          </div>
+        <section className="assistant-intro">
+          <p className="eyebrow">训练助理</p>
+          <h1>先生成，再决定是否应用</h1>
+          <p className="assistant-meta">
+            <span>目标：{memberProfile.goalLabel}</span>
+            <span>状态：{assistantReady ? "已就绪" : "基础模式"}</span>
+            <span>已保存：{appliedOutput ? "有" : "无"}</span>
+          </p>
         </section>
       </Reveal>
 
       <Reveal delay={80}>
-        <section className="panel member-section">
-          <div className="icon-stat-grid">
-            <article className="icon-stat-card"><span className="emoji-mark" aria-hidden="true">🎯</span><div><span>当前目标</span><strong>{memberProfile.goalLabel}</strong></div></article>
-            <article className="icon-stat-card"><span className="emoji-mark" aria-hidden="true">🗓️</span><div><span>训练频率</span><strong>{memberProfile.trainingDays} 天 / 周</strong></div></article>
-            <article className="icon-stat-card"><span className="emoji-mark" aria-hidden="true">🏟️</span><div><span>训练条件</span><strong>{memberProfile.equipmentAccess}</strong></div></article>
-            <article className="icon-stat-card"><span className="emoji-mark" aria-hidden="true">💾</span><div><span>已保存结果</span><strong>{appliedOutput ? "已有内容" : "暂未保存"}</strong></div></article>
+        <section className="assistant-card">
+          <div className="assistant-card-title">选择场景</div>
+          <div className="segmented">
+            {(["plan", "guidance", "review"] as AssistantMode[]).map((item) => (
+              <button
+                className={item === mode ? "segment segment-active" : "segment"}
+                key={item}
+                onClick={() => setMode(item)}
+                type="button"
+              >
+                {modeLabels[item]}
+              </button>
+            ))}
           </div>
-        </section>
-      </Reveal>
 
-      <Reveal delay={140}>
-        <section className="panel member-section">
-        <div className="panel-header">
-          <div><p className="eyebrow">选择场景</p><h2>让助理处理当前需求</h2></div>
-        </div>
-        <div className="segmented">
-          {(["plan", "guidance", "review"] as AssistantMode[]).map((item) => (
-            <button
-              className={item === mode ? "segment segment-active" : "segment"}
-              key={item}
-              onClick={() => setMode(item)}
-              type="button"
-            >
-              {modeLabels[item]}
-            </button>
-          ))}
-        </div>
+          <div className="assistant-card-title">常用提问</div>
+          <div className="preset-row">
+            {presets[mode].map((preset) => (
+              <button className="preset-chip-simple" key={preset} onClick={() => setMessage(preset)} type="button">
+                {preset}
+              </button>
+            ))}
+          </div>
 
-        <div className="preset-row">
-          {presets[mode].map((preset) => (
-            <button className="hero-chip preset-chip" key={preset} onClick={() => setMessage(preset)} type="button">
-              {preset}
-            </button>
-          ))}
-        </div>
+          <label className="field field-wide">
+            <span>你的问题</span>
+            <textarea rows={5} value={message} onChange={(event) => setMessage(event.target.value)} />
+          </label>
 
-        <label className="field field-wide">
-          <span>输入你的问题</span>
-          <textarea rows={6} value={message} onChange={(event) => setMessage(event.target.value)} />
-        </label>
-
-        {mode === "guidance" ? (
-          <div className="media-uploader">
-            <div className="media-uploader-head">
-              <div>
-                <span className="mini-label">动作纠错上传</span>
-                <strong>上传照片或短视频，让 AI 观察你的动作</strong>
-                <p>建议上传单个动作、画面清晰、光线稳定的素材。视频建议 10-20 秒内。</p>
+          {mode === "guidance" ? (
+            <div className="assistant-upload">
+              <div className="assistant-upload-head">
+                <strong>上传动作素材（可选）</strong>
+                <span className={multimodalReady ? "badge-outline" : "badge-neutral"}>
+                  {multimodalReady ? "支持多模态" : "需图像/视频模型"}
+                </span>
               </div>
-              <span className={multimodalReady ? "badge-accent" : "badge-neutral"}>
-                {multimodalReady ? "🎥 支持多模态" : "⚠️ 需可识图/视频模型"}
-              </span>
-            </div>
 
-            <div className="filter-row">
-              <button
-                className={attachmentKind === "image" ? "segment segment-active" : "segment"}
-                onClick={() => {
-                  setAttachmentKind("image");
-                  setAttachmentFile(null);
-                }}
-                type="button"
-              >
-                上传图片
-              </button>
-              <button
-                className={attachmentKind === "video" ? "segment segment-active" : "segment"}
-                onClick={() => {
-                  setAttachmentKind("video");
-                  setAttachmentFile(null);
-                }}
-                type="button"
-              >
-                上传视频
-              </button>
-            </div>
+              <div className="filter-row">
+                <button
+                  className={attachmentKind === "image" ? "segment segment-active" : "segment"}
+                  onClick={() => {
+                    setAttachmentKind("image");
+                    setAttachmentFile(null);
+                  }}
+                  type="button"
+                >
+                  图片
+                </button>
+                <button
+                  className={attachmentKind === "video" ? "segment segment-active" : "segment"}
+                  onClick={() => {
+                    setAttachmentKind("video");
+                    setAttachmentFile(null);
+                  }}
+                  type="button"
+                >
+                  视频
+                </button>
+              </div>
 
-            <label className="upload-dropzone">
-              <input
-                accept={attachmentKind === "image" ? "image/*" : "video/mp4,video/quicktime,video/webm"}
-                className="upload-input"
-                onChange={(event) => setAttachmentFile(event.target.files?.[0] ?? null)}
-                type="file"
-              />
-              <span className="emoji-mark" aria-hidden="true">{attachmentKind === "image" ? "📸" : "🎬"}</span>
-              <strong>{attachmentFile ? attachmentFile.name : attachmentKind === "image" ? "选择一张动作照片" : "选择一个动作视频"}</strong>
-              <p>{attachmentKind === "image" ? "支持 jpg/png/webp/gif/heic" : "支持 mp4/mov/webm，建议不超过 16MB"}</p>
-            </label>
+              <label className="upload-dropzone-simple">
+                <input
+                  accept={attachmentKind === "image" ? "image/*" : "video/mp4,video/quicktime,video/webm"}
+                  className="upload-input"
+                  onChange={(event) => setAttachmentFile(event.target.files?.[0] ?? null)}
+                  type="file"
+                />
+                <strong>
+                  {attachmentFile
+                    ? attachmentFile.name
+                    : attachmentKind === "image"
+                      ? "选择一张动作照片"
+                      : "选择一个动作视频"}
+                </strong>
+                <p>{attachmentKind === "image" ? "jpg / png / webp" : "mp4 / mov / webm，≤ 16MB"}</p>
+              </label>
 
-            {attachmentPreviewUrl ? (
-              <div className="upload-preview-card">
-                {attachmentKind === "image" ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img alt="动作上传预览" className="upload-preview-image" src={attachmentPreviewUrl} />
-                ) : (
-                  <video className="upload-preview-video" controls src={attachmentPreviewUrl} />
-                )}
-                <div className="upload-preview-meta">
-                  <span className="badge-outline">{attachmentKind === "image" ? "📸 图片预览" : "🎬 视频预览"}</span>
+              {attachmentPreviewUrl ? (
+                <div className="upload-preview-simple">
+                  {attachmentKind === "image" ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img alt="动作上传预览" className="upload-preview-image" src={attachmentPreviewUrl} />
+                  ) : (
+                    <video className="upload-preview-video" controls src={attachmentPreviewUrl} />
+                  )}
                   <button className="button-tertiary compact" onClick={() => setAttachmentFile(null)} type="button">
                     移除素材
                   </button>
                 </div>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
+          ) : null}
 
-            {!multimodalReady ? (
-              <div className="warning-banner">
-                当前管理员配置的模型不一定支持动作纠错素材分析。若上传后仍返回通用建议，请让管理员切换到支持图片/视频理解的模型。
-              </div>
-            ) : null}
+          {error ? <div className="assistant-error">{error}</div> : null}
+
+          <div className="submit-row">
+            <button
+              className="button-primary"
+              disabled={isSubmitting || !message.trim()}
+              onClick={() => void submitAssistantRequest()}
+              type="button"
+            >
+              {isSubmitting ? "生成中..." : "生成建议"}
+            </button>
+            <span className="helper-text">生成结果只在你确认后才会保存。</span>
           </div>
-        ) : null}
-
-        {error ? <div className="empty-state">{error}</div> : null}
-
-        <div className="submit-row">
-          <button className="button-primary" disabled={isSubmitting || !message.trim()} onClick={() => void submitAssistantRequest()} type="button">
-            {isSubmitting ? "生成中..." : `生成${modeLabels[mode]}建议`}
-          </button>
-          <span className="helper-text">
-            {mode === "guidance" && attachmentFile
-              ? "将结合你上传的素材与当前问题生成动作纠错建议。"
-              : "生成结果只在你确认后才会保存到对应页面。"}
-          </span>
-        </div>
         </section>
       </Reveal>
 
-      <Reveal delay={200}>
-        <section className="panel member-section">
-        <div className="panel-header">
-          <div><p className="eyebrow">生成结果</p><h2>{response?.title ?? "等待生成结果"}</h2></div>
-        </div>
+      <Reveal delay={160}>
+        <section className="assistant-card">
+          <div className="assistant-card-title">生成结果</div>
 
-        {response ? (
-          <div className="assistant-results">
-            <article className="assistant-summary-card">
-              <p>{response.summary}</p>
-            </article>
+          {response ? (
+            <div className="assistant-results">
+              <article className="assistant-summary-simple">
+                <strong>{response.title}</strong>
+                <p>{response.summary}</p>
+              </article>
 
-            {response.highlights.length ? (
-              <div className="bullet-stack">
-                {response.highlights.map((item) => (
-                  <div className="bullet-card bullet-card-lift" key={item}>
-                    <p>{item}</p>
+              {response.highlights.length ? (
+                <div className="bullet-stack">
+                  {response.highlights.map((item) => (
+                    <div className="bullet-card" key={item}>
+                      <p>{item}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {response.trainingPlan.length ? (
+                <div className="schedule-table">
+                  {response.trainingPlan.map((day) => (
+                    <div className="schedule-row schedule-row-interactive" key={day.dayLabel}>
+                      <div>
+                        <strong>{day.dayLabel}</strong>
+                        <p>{day.focus}</p>
+                      </div>
+                      <div>{day.duration}</div>
+                      <div>{day.intensity}</div>
+                      <div>{day.note}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="member-reading-flow">
+                {response.nutritionTips.length ? (
+                  <div className="bullet-stack">
+                    <div className="section-caption">饮食建议</div>
+                    {response.nutritionTips.map((item) => (
+                      <div className="bullet-card" key={item}>
+                        <p>{item}</p>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            ) : null}
+                ) : null}
 
-            {response.trainingPlan.length ? (
-              <div className="schedule-table">
-                {response.trainingPlan.map((day) => (
-                  <div className="schedule-row schedule-row-interactive" key={day.dayLabel}>
-                    <div><strong>{day.dayLabel}</strong><p>{day.focus}</p></div>
-                    <div>{day.duration}</div>
-                    <div>{day.intensity}</div>
-                    <div>{day.note}</div>
-                    <div className="row-actions"><span className="badge-outline">建议</span></div>
+                {response.guidancePoints.length ? (
+                  <div className="bullet-stack">
+                    <div className="section-caption">动作要点</div>
+                    {response.guidancePoints.map((item) => (
+                      <div className="bullet-card" key={item}>
+                        <p>{item}</p>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                ) : null}
+
+                {response.reviewInsights.length ? (
+                  <div className="bullet-stack">
+                    <div className="section-caption">复盘建议</div>
+                    {response.reviewInsights.map((item) => (
+                      <div className="bullet-card" key={item}>
+                        <p>{item}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {response.recoveryActions.length ? (
+                  <div className="bullet-stack">
+                    <div className="section-caption">接下来</div>
+                    {response.recoveryActions.map((item) => (
+                      <div className="bullet-card" key={item}>
+                        <p>{item}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {response.safetyFlags.length ? (
+                  <div className="bullet-stack">
+                    <div className="section-caption">风险提醒</div>
+                    {response.safetyFlags.map((item) => (
+                      <div className="bullet-card risk-card" key={item}>
+                        <p>{item}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {response.citations.length ? (
+                  <div className="citation-list">
+                    <div className="section-caption">参考来源</div>
+                    {response.citations.map((item) => (
+                      <article className="citation-card" key={`${item.source}-${item.title}`}>
+                        <strong>{item.title}</strong>
+                        <p>{item.note}</p>
+                        <span>{item.source}</span>
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
               </div>
-            ) : null}
 
-            <div className="member-reading-flow">
-              {response.nutritionTips.length ? (
-                <div className="bullet-stack">
-                  <div className="section-caption">饮食建议</div>
-                  {response.nutritionTips.map((item) => (
-                    <div className="bullet-card bullet-card-lift" key={item}><p>{item}</p></div>
-                  ))}
-                </div>
-              ) : null}
-
-              {response.guidancePoints.length ? (
-                <div className="bullet-stack">
-                  <div className="section-caption">动作要点</div>
-                  {response.guidancePoints.map((item) => (
-                    <div className="bullet-card bullet-card-lift" key={item}><p>{item}</p></div>
-                  ))}
-                </div>
-              ) : null}
-
-              {response.reviewInsights.length ? (
-                <div className="bullet-stack">
-                  <div className="section-caption">复盘建议</div>
-                  {response.reviewInsights.map((item) => (
-                    <div className="bullet-card bullet-card-lift" key={item}><p>{item}</p></div>
-                  ))}
-                </div>
-              ) : null}
-
-              {response.recoveryActions.length ? (
-                <div className="bullet-stack">
-                  <div className="section-caption">接下来</div>
-                  {response.recoveryActions.map((item) => (
-                    <div className="bullet-card bullet-card-lift" key={item}><p>{item}</p></div>
-                  ))}
-                </div>
-              ) : null}
-
-              {response.safetyFlags.length ? (
-                <div className="bullet-stack">
-                  <div className="section-caption">风险提醒</div>
-                  {response.safetyFlags.map((item) => (
-                    <div className="bullet-card risk-card" key={item}><p>{item}</p></div>
-                  ))}
-                </div>
-              ) : null}
-
-              {response.citations.length ? (
-                <div className="citation-list">
-                  <div className="section-caption">参考来源</div>
-                  {response.citations.map((item) => (
-                    <article className="citation-card citation-card-bright" key={`${item.source}-${item.title}`}>
-                      <strong>{item.title}</strong>
-                      <p>{item.note}</p>
-                      <span>{item.source}</span>
-                    </article>
-                  ))}
-                </div>
-              ) : null}
+              <div className="submit-row">
+                <button
+                  className="button-primary"
+                  disabled={isApplying || isSaving}
+                  onClick={() => void handleApplyResult()}
+                  type="button"
+                >
+                  {isApplying ? "应用中..." : `应用到${applyLabels[mode]}`}
+                </button>
+                <span className="helper-text">
+                  {mode === "plan"
+                    ? "应用后会覆盖当前周计划。"
+                    : mode === "guidance"
+                      ? "应用后会保存为当前指导。"
+                      : "应用后会保存为当前复盘。"}
+                </span>
+              </div>
             </div>
-
-            <div className="submit-row">
-              <button className="button-primary" disabled={isApplying || isSaving} onClick={() => void handleApplyResult()} type="button">
-                {isApplying ? "应用中..." : `应用到${applyLabels[mode]}中`}
-              </button>
-              <span className="helper-text">
-                {mode === "plan"
-                  ? "应用后会覆盖当前周计划。"
-                  : mode === "guidance"
-                    ? "应用后会保存为当前指导卡片。"
-                    : "应用后会保存为当前复盘建议。"}
-              </span>
-            </div>
-          </div>
-        ) : (
-          <div className="empty-state">先输入你的问题，再生成本次建议。</div>
-        )}
+          ) : (
+            <div className="assistant-empty">先输入问题，再生成建议。</div>
+          )}
         </section>
       </Reveal>
 
       {appliedOutput ? (
-        <Reveal delay={260}>
-          <section className="panel member-section">
-          <div className="panel-header">
-            <div><p className="eyebrow">已保存内容</p><h2>当前已应用版本</h2></div>
-          </div>
-          <article className="assistant-summary-card">
-            <p>{appliedOutput.summary}</p>
-            <span className="helper-text">保存时间：{appliedOutput.appliedAt.replace("T", " ").slice(0, 16)}</span>
-          </article>
+        <Reveal delay={220}>
+          <section className="assistant-card">
+            <div className="assistant-card-title">已保存内容</div>
+            <article className="assistant-summary-simple">
+              <strong>{appliedOutput.title ?? "当前已应用版本"}</strong>
+              <p>{appliedOutput.summary}</p>
+              <span className="helper-text">保存时间：{appliedOutput.appliedAt.replace("T", " ").slice(0, 16)}</span>
+            </article>
           </section>
         </Reveal>
       ) : null}
