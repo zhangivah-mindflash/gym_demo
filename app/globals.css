@@ -234,7 +234,7 @@ select {
   max-width: 1180px;
   width: 100%;
   margin: 0 auto;
-  padding: 40px 28px 80px;
+  padding: 20px 28px 80px;
 }
 
 .greeting {
@@ -257,7 +257,7 @@ select {
 }
 
 .greeting-sub {
-  margin: 0 0 32px;
+  margin: 0 0 22px;
   color: var(--text-soft);
   font-size: 14px;
   text-align: center;
@@ -687,6 +687,10 @@ select {
   margin-top: 20px;
 }
 
+.result-section:first-child {
+  margin-top: 0;
+}
+
 .result-section-title {
   font-size: 17px;
   color: var(--text);
@@ -727,62 +731,123 @@ select {
   color: var(--danger-text);
 }
 
-.plan-table {
-  display: grid;
-  grid-template-columns: 1.15fr 1fr 0.9fr 1.4fr;
-  background: var(--surface-solid);
+/* ---------- Guidance numbered points ---------- */
+.point-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  counter-reset: point;
+}
+
+.point-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 16px;
+  background: #ffffff;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(90, 70, 150, 0.04);
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 200ms ease;
 }
 
-.plan-row {
-  display: contents;
+.point-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 6px 16px rgba(148, 128, 200, 0.12);
+  transform: translateY(-1px);
 }
 
-.plan-row > * {
-  padding: 13px 14px;
-  border-top: 1px solid var(--border);
-  background: var(--surface-solid);
-  font-size: 13.5px;
-  transition: background 180ms ease;
+.point-index {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--gradient-primary);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 10px rgba(107, 92, 191, 0.3);
+  line-height: 1;
 }
 
-.plan-row:first-child > * {
-  border-top: 0;
+.point-text {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--text);
+  padding-top: 4px;
 }
 
-.plan-row:hover > * {
+.day-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.day-card {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: 0 1px 2px rgba(90, 70, 150, 0.04);
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.day-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 6px 16px rgba(148, 128, 200, 0.1);
+}
+
+.day-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.day-card-label {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--primary);
+}
+
+.day-card-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tag {
+  display: inline-block;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary);
   background: var(--primary-soft);
+  border-radius: 999px;
 }
 
-.plan-cell-title {
+.day-card-focus {
+  margin: 0 0 6px;
+  font-size: 14.5px;
   font-weight: 600;
   color: var(--text);
+  line-height: 1.45;
 }
 
-.plan-cell-title small {
-  display: block;
-  color: var(--text-mute);
-  font-weight: 400;
-  font-size: 12.5px;
-  margin-top: 3px;
-}
-
-.plan-cell-muted {
+.day-card-note {
+  margin: 0;
+  font-size: 13.5px;
   color: var(--text-soft);
-}
-
-@media (max-width: 720px) {
-  .plan-table {
-    grid-template-columns: 1fr;
-  }
-  .plan-row > * {
-    border-top: 1px solid var(--border);
-  }
-  .plan-row:first-child > *:first-child {
-    border-top: 0;
-  }
+  line-height: 1.55;
 }
 
 .citations {
@@ -831,7 +896,7 @@ select {
 }
 
 .empty {
-  padding: 56px 24px;
+  padding: 40px 24px;
   text-align: center;
   color: var(--text-mute);
   font-size: 14px;

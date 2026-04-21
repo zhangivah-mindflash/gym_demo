@@ -11,7 +11,8 @@ export default function AssistantPage() {
 
   const [mode, setMode] = useState<AssistantMode>("guidance");
   const [message, setMessage] = useState(presets.guidance[0]);
-  const [response, setResponse] = useState<AssistantResponse | null>(null);
+  const [responses, setResponses] = useState<Partial<Record<AssistantMode, AssistantResponse>>>({});
+  const response = responses[mode] ?? null;
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const attachmentKind: AssistantAttachmentKind = "video";
@@ -60,7 +61,7 @@ export default function AssistantPage() {
       if (!apiResponse.ok || !json.data) {
         throw new Error(json.error ?? "Error");
       }
-      setResponse(json.data);
+      setResponses((prev) => ({ ...prev, [mode]: json.data }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error");
     } finally {
@@ -179,17 +180,19 @@ function Result({ response }: { response: AssistantResponse }) {
           {response.trainingPlan.length > 0 && (
             <div className="result-section">
               <p className="result-section-title">{t("sec_plan")}</p>
-              <div className="plan-table">
+              <div className="day-list">
                 {response.trainingPlan.map((day) => (
-                  <div className="plan-row" key={day.dayLabel}>
-                    <div className="plan-cell-title">
-                      {day.dayLabel}
-                      <small>{day.focus}</small>
-                    </div>
-                    <div className="plan-cell-muted">{day.duration}</div>
-                    <div className="plan-cell-muted">{day.intensity}</div>
-                    <div className="plan-cell-muted">{day.note}</div>
-                  </div>
+                  <article className="day-card" key={day.dayLabel}>
+                    <header className="day-card-head">
+                      <span className="day-card-label">{day.dayLabel}</span>
+                      <div className="day-card-tags">
+                        {day.duration && <span className="tag">{day.duration}</span>}
+                        {day.intensity && <span className="tag">{day.intensity}</span>}
+                      </div>
+                    </header>
+                    {day.focus && <p className="day-card-focus">{day.focus}</p>}
+                    {day.note && <p className="day-card-note">{day.note}</p>}
+                  </article>
                 ))}
               </div>
             </div>
@@ -201,7 +204,17 @@ function Result({ response }: { response: AssistantResponse }) {
       )}
 
       {response.mode === "guidance" && response.guidancePoints.length > 0 && (
-        <ResultList title={t("sec_guidance")} items={response.guidancePoints} />
+        <div className="result-section">
+          <p className="result-section-title">{t("sec_guidance")}</p>
+          <ol className="point-list">
+            {response.guidancePoints.map((item, idx) => (
+              <li className="point-card" key={item}>
+                <span className="point-index">{idx + 1}</span>
+                <p className="point-text">{item}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
       )}
 
       {response.safetyFlags.length > 0 && (
