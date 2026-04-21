@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from "next";
+import { I18nProvider } from "@/lib/i18n";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "PulseLab 训练助理",
-  description: "健身房/工作室训练助理 Demo",
+  title: "YUNI 训练助理",
+  description: "YUNI Training Assistant",
 };
 
 export const viewport: Viewport = {
@@ -19,7 +20,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>
+        <I18nProvider>{children}</I18nProvider>
+      </body>
     </html>
   );
 }
