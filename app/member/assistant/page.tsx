@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { MainLayout } from "@/components/main-layout";
 import { Reveal } from "@/components/reveal";
-import { useDemo } from "@/lib/demo-store";
+import { initialDemoState } from "@/lib/mock-data";
 import type { AssistantAttachmentKind, AssistantMode, AssistantResponse } from "@/lib/demo-types";
-import { isAssistantReady, supportsMultimodalAssistant } from "@/lib/model-settings";
+
+const memberProfile = initialDemoState.memberProfile;
 
 const presets: Record<AssistantMode, string[]> = {
   plan: [
@@ -29,41 +29,17 @@ const modeLabels: Record<AssistantMode, string> = {
   review: "复盘更新",
 };
 
-const applyLabels: Record<AssistantMode, string> = {
-  plan: "当前计划",
-  guidance: "动作指导",
-  review: "复盘更新",
-};
-
 const initialMode: AssistantMode = "plan";
 
 export default function MemberAssistantPage() {
-  const router = useRouter();
-  const {
-    state: { session, memberProfile, modelSettings, appliedAssistantOutputs },
-    applyAssistantResult,
-    isSaving,
-    isBootstrapped,
-  } = useDemo();
   const [mode, setMode] = useState<AssistantMode>(initialMode);
   const [message, setMessage] = useState(presets[initialMode][0]);
   const [response, setResponse] = useState<AssistantResponse | null>(null);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isApplying, setIsApplying] = useState(false);
   const [attachmentKind, setAttachmentKind] = useState<AssistantAttachmentKind>("image");
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [attachmentPreviewUrl, setAttachmentPreviewUrl] = useState("");
-
-  useEffect(() => {
-    if (!isBootstrapped) return;
-    if (!session.isAuthenticated) router.replace("/login");
-    if (session.role && session.role !== "member") router.replace(`/${session.role}`);
-  }, [isBootstrapped, session.isAuthenticated, session.role, router]);
-
-  const assistantReady = useMemo(() => isAssistantReady(modelSettings), [modelSettings]);
-  const multimodalReady = useMemo(() => supportsMultimodalAssistant(modelSettings), [modelSettings]);
-  const appliedOutput = appliedAssistantOutputs[mode];
 
   useEffect(() => {
     setMessage(presets[mode][0]);
@@ -123,30 +99,15 @@ export default function MemberAssistantPage() {
     }
   }
 
-  async function handleApplyResult() {
-    if (!response) return;
-    setIsApplying(true);
-    setError("");
-    try {
-      await applyAssistantResult(mode, response);
-      window.alert(`已应用到${applyLabels[mode]}中。`);
-    } catch (applyError) {
-      setError(applyError instanceof Error ? applyError.message : "应用结果失败");
-    } finally {
-      setIsApplying(false);
-    }
-  }
-
   return (
-    <MainLayout currentPath="/member/assistant">
+    <MainLayout>
       <Reveal>
         <section className="assistant-intro">
           <p className="eyebrow">训练助理</p>
-          <h1>先生成，再决定是否应用</h1>
+          <h1>输入问题，生成建议</h1>
           <p className="assistant-meta">
+            <span>会员：{memberProfile.memberName}</span>
             <span>目标：{memberProfile.goalLabel}</span>
-            <span>状态：{assistantReady ? "已就绪" : "基础模式"}</span>
-            <span>已保存：{appliedOutput ? "有" : "无"}</span>
           </p>
         </section>
       </Reveal>
@@ -185,9 +146,6 @@ export default function MemberAssistantPage() {
             <div className="assistant-upload">
               <div className="assistant-upload-head">
                 <strong>上传动作素材（可选）</strong>
-                <span className={multimodalReady ? "badge-outline" : "badge-neutral"}>
-                  {multimodalReady ? "支持多模态" : "需图像/视频模型"}
-                </span>
               </div>
 
               <div className="filter-row">
@@ -257,7 +215,6 @@ export default function MemberAssistantPage() {
             >
               {isSubmitting ? "生成中..." : "生成建议"}
             </button>
-            <span className="helper-text">生成结果只在你确认后才会保存。</span>
           </div>
         </section>
       </Reveal>
@@ -368,43 +325,12 @@ export default function MemberAssistantPage() {
                   </div>
                 ) : null}
               </div>
-
-              <div className="submit-row">
-                <button
-                  className="button-primary"
-                  disabled={isApplying || isSaving}
-                  onClick={() => void handleApplyResult()}
-                  type="button"
-                >
-                  {isApplying ? "应用中..." : `应用到${applyLabels[mode]}`}
-                </button>
-                <span className="helper-text">
-                  {mode === "plan"
-                    ? "应用后会覆盖当前周计划。"
-                    : mode === "guidance"
-                      ? "应用后会保存为当前指导。"
-                      : "应用后会保存为当前复盘。"}
-                </span>
-              </div>
             </div>
           ) : (
             <div className="assistant-empty">先输入问题，再生成建议。</div>
           )}
         </section>
       </Reveal>
-
-      {appliedOutput ? (
-        <Reveal delay={220}>
-          <section className="assistant-card">
-            <div className="assistant-card-title">已保存内容</div>
-            <article className="assistant-summary-simple">
-              <strong>{appliedOutput.title ?? "当前已应用版本"}</strong>
-              <p>{appliedOutput.summary}</p>
-              <span className="helper-text">保存时间：{appliedOutput.appliedAt.replace("T", " ").slice(0, 16)}</span>
-            </article>
-          </section>
-        </Reveal>
-      ) : null}
     </MainLayout>
   );
 }

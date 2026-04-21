@@ -1,10 +1,9 @@
 import type { Metadata, Viewport } from "next";
-import { DemoProvider } from "@/lib/demo-store";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "PulseLab Fitness AI",
-  description: "健身房/工作室会员体系智能健身助手 Demo",
+  title: "PulseLab 训练助理",
+  description: "健身房/工作室训练助理 Demo",
 };
 
 export const viewport: Viewport = {
@@ -20,9 +19,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body>
-        <DemoProvider>{children}</DemoProvider>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

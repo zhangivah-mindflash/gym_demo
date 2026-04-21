@@ -1,4 +1,5 @@
-import { guidanceBase, nutritionHints } from "@/lib/mock-data";
+import { guidanceBase, initialDemoState, nutritionHints } from "@/lib/mock-data";
+import { modelSettingDefinitions } from "@/lib/model-settings";
 import type {
   AssistantAttachmentKind,
   AssistantCitation,
@@ -7,11 +8,8 @@ import type {
   AssistantResponse,
   DemoState,
 } from "@/lib/demo-types";
-import { getDemoState, getModelSettingsMap } from "@/lib/server/demo-db";
 
 type AssistantRequest = {
-  userId: string;
-  selectedMemberId?: string | null;
   mode: AssistantMode;
   message: string;
   attachment?: AssistantAttachment | null;
@@ -61,22 +59,32 @@ type ChatCompletionsJson = {
   }>;
 };
 
-const multimodalTestSamples = {
-  image: {
-    kind: "image" as const,
-    mimeType: "image/jpeg",
-    dataUrl: "https://dashscope.oss-cn-beijing.aliyuncs.com/images/dog_and_girl.jpeg",
-    filename: "multimodal-test-image.jpg",
-    prompt: "请简单描述图片主体，并返回合法 JSON。",
-  },
-  video: {
-    kind: "video" as const,
-    mimeType: "video/mp4",
-    dataUrl: "https://help-static-aliyun-doc.aliyuncs.com/file-manage-files/zh-CN/20241115/cqqkru/1.mp4",
-    filename: "multimodal-test-video.mp4",
-    prompt: "请简单描述视频主体，并返回合法 JSON。",
-  },
+// Map setting ids to environment variable names.
+// Users set these in Vercel Project Settings -> Environment Variables.
+const envVarMap: Record<string, string> = {
+  "llm-provider": "LLM_PROVIDER",
+  "llm-base-url": "LLM_BASE_URL",
+  "llm-api-key": "LLM_API_KEY",
+  "llm-model": "LLM_MODEL",
+  "assistant-system": "LLM_SYSTEM_PROMPT",
+  "plan-system": "LLM_PLAN_PROMPT",
+  "guidance-system": "LLM_GUIDANCE_PROMPT",
+  "review-system": "LLM_REVIEW_PROMPT",
 };
+
+function loadSettings(): AssistantSettings {
+  const result: AssistantSettings = {};
+  for (const def of modelSettingDefinitions) {
+    const envName = envVarMap[def.id];
+    const fromEnv = envName ? process.env[envName] : undefined;
+    result[def.id] = (fromEnv ?? def.defaultValue ?? "").trim();
+  }
+  return result;
+}
+
+function staticDemoState(): DemoState {
+  return initialDemoState;
+}
 
 function containsRiskSignal(text: string) {
   return /(痛|疼|晕|眩晕|胸闷|旧伤|不适|麻|产后|孕)/.test(text);
@@ -250,8 +258,8 @@ function planFallback(state: DemoState, message: string): AssistantResponse {
 
   return {
     mode: "plan",
-    title: `${memberProfile.memberName} 的 AI 训练计划建议`,
-    summary: `围绕“${memberProfile.goalLabel}”生成一周训练与简化饮食建议，优先保证 ${memberProfile.trainingDays} 天可执行，并考虑当前风险边界。`,
+    title: `${memberProfile.memberName} 的训练计划建议`,
+    summary: `围绕"${memberProfile.goalLabel}"生成一周训练与简化饮食建议，优先保证 ${memberProfile.trainingDays} 天可执行，并考虑当前风险边界。`,
     highlights: [
       `每周安排 ${memberProfile.trainingDays} 天训练，每次约 ${memberProfile.sessionMinutes} 分钟。`,
       `当前训练水平为 ${memberProfile.trainingLevel}，器械条件为 ${memberProfile.equipmentAccess}。`,
@@ -266,7 +274,7 @@ function planFallback(state: DemoState, message: string): AssistantResponse {
     })),
     nutritionTips: [
       ...nutritionHints.map((item) => `${item.title}：${item.body}`),
-      `结合会员偏好，当前建议采用“${memberProfile.dietPreference}”的轻量执行策略。`,
+      `结合会员偏好，当前建议采用"${memberProfile.dietPreference}"的轻量执行策略。`,
     ],
     guidancePoints: [],
     reviewInsights: [],
@@ -283,7 +291,7 @@ function planFallback(state: DemoState, message: string): AssistantResponse {
     citations: currentCitations(state),
     nextSteps: ["与真人教练复核后再正式发布计划。", "执行一周后提交复盘，系统再更新下周安排。"],
     providerLabel: "规则生成",
-    disclaimer: "管理员尚未配置 LLM 或请求失败，当前展示本地规则生成结果。",
+    disclaimer: "当前未配置外部模型或请求失败，展示本地规则生成结果。",
     usedFallback: true,
   };
 }
@@ -324,7 +332,7 @@ function guidanceFallback(state: DemoState, message: string, options?: { mediaAt
     citations: currentCitations(state),
     nextSteps: ["先用较轻重量完成一组动作测试。", "如果依旧不稳，切换到更稳妥的替代动作。"],
     providerLabel: "规则生成",
-    disclaimer: "管理员尚未配置 LLM 或请求失败，当前展示本地规则生成结果。",
+    disclaimer: "当前未配置外部模型或请求失败，展示本地规则生成结果。",
     usedFallback: true,
   };
 }
@@ -357,12 +365,12 @@ function reviewFallback(state: DemoState, message: string): AssistantResponse {
       "优先保证睡眠和训练后整理，避免连续高强度堆叠。",
     ],
     safetyFlags: riskFlag
-      ? ["出现疼痛、眩晕、胸闷等异常时，停止训练并联系教练。"] 
+      ? ["出现疼痛、眩晕、胸闷等异常时，停止训练并联系教练。"]
       : ["若疲劳明显上升，先降低训练总量而不是硬顶。"],
     citations: currentCitations(state),
     nextSteps: ["提交本周复盘给教练复核。", "下周开始先执行低风险版本，再根据状态追加负荷。"],
     providerLabel: "规则生成",
-    disclaimer: "管理员尚未配置 LLM 或请求失败，当前展示本地规则生成结果。",
+    disclaimer: "当前未配置外部模型或请求失败，展示本地规则生成结果。",
     usedFallback: true,
   };
 }
@@ -377,20 +385,6 @@ function buildModePrompt(mode: AssistantMode, settings: Record<string, string>) 
   if (mode === "plan") return settings["plan-system"] ?? "";
   if (mode === "guidance") return settings["guidance-system"] ?? "";
   return settings["review-system"] ?? "";
-}
-
-function normalizeSettings(overrides?: Partial<AssistantSettings>) {
-  const persisted = getModelSettingsMap();
-  if (!overrides) return persisted;
-
-  return Object.fromEntries(
-    Object.entries(persisted).map(([key, value]) => {
-      if (!(key in overrides)) {
-        return [key, value];
-      }
-      return [key, overrides[key] ?? ""];
-    }),
-  ) as AssistantSettings;
 }
 
 function buildUserContext(
@@ -452,7 +446,7 @@ function normalizeResponse(
 ): AssistantResponse {
   return {
     mode,
-    title: String(payload.title ?? "AI 助理建议"),
+    title: String(payload.title ?? "助理建议"),
     summary: String(payload.summary ?? ""),
     highlights: asStringArray(payload.highlights),
     trainingPlan: asPlanArray(payload.trainingPlan),
@@ -464,7 +458,7 @@ function normalizeResponse(
     citations: asCitationArray(payload.citations),
     nextSteps: asStringArray(payload.nextSteps),
     providerLabel,
-    disclaimer: "当前结果由管理员配置的外部模型返回，仍建议由真人教练复核后执行。",
+    disclaimer: "当前结果由外部模型返回，仍建议由真人教练复核后执行。",
     usedFallback: false,
   };
 }
@@ -474,7 +468,7 @@ async function callOpenAiCompatible(
   mode: AssistantMode,
   message: string,
   settings: AssistantSettings,
-  options?: { strict?: boolean; attachment?: AssistantAttachment | null },
+  options?: { attachment?: AssistantAttachment | null },
 ) {
   const baseUrl = settings["llm-base-url"]?.trim();
   const apiKey = settings["llm-api-key"]?.trim();
@@ -483,18 +477,13 @@ async function callOpenAiCompatible(
   const providerLabel = `${protocol} / ${model}`;
 
   if (!baseUrl || !apiKey || !model) {
-    if (options?.strict) {
-      if (!baseUrl) throw new Error("缺少 Base URL。");
-      if (!apiKey) throw new Error("缺少 API Key。");
-      throw new Error("缺少模型名称。");
-    }
     return buildFallback(state, mode, message, { mediaAttached: Boolean(options?.attachment) });
   }
 
   const isDashScopeProvider = isDashScope(baseUrl);
   const hasAttachment = Boolean(options?.attachment);
   const controller = new AbortController();
-  const timeoutMs = options?.strict ? 60000 : 45000;
+  const timeoutMs = 45000;
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
@@ -554,14 +543,8 @@ async function callOpenAiCompatible(
               model,
               temperature,
               messages: [
-                {
-                  role: "system",
-                  content: systemPrompt,
-                },
-                {
-                  role: "user",
-                  content: multimediaContent ?? userPrompt,
-                },
+                { role: "system", content: systemPrompt },
+                { role: "user", content: multimediaContent ?? userPrompt },
               ],
               ...dashScopeCompatFields,
             }),
@@ -597,9 +580,25 @@ async function callOpenAiCompatible(
   }
 }
 
+export function isAssistantConfigured(): boolean {
+  const settings = loadSettings();
+  return Boolean(settings["llm-base-url"] && settings["llm-api-key"] && settings["llm-model"]);
+}
+
+export function supportsMultimodal(): boolean {
+  const settings = loadSettings();
+  const model = (settings["llm-model"] ?? "").toLowerCase();
+  const baseUrl = (settings["llm-base-url"] ?? "").toLowerCase();
+  if (!model) return false;
+  if (/dashscope\.aliyuncs\.com/.test(baseUrl)) {
+    return true;
+  }
+  return /(gpt-4\.1|gpt-4o|gpt-4\.5|gpt-5|omni|vision|vl)/.test(model);
+}
+
 export async function runAssistant(request: AssistantRequest): Promise<AssistantResponse> {
-  const state = getDemoState(request.userId, request.selectedMemberId);
-  const settings = normalizeSettings();
+  const state = staticDemoState();
+  const settings = loadSettings();
 
   try {
     return await callOpenAiCompatible(state, request.mode, request.message, settings, {
@@ -612,82 +611,8 @@ export async function runAssistant(request: AssistantRequest): Promise<Assistant
     return {
       ...fallback,
       disclaimer: request.attachment
-        ? "外部模型未能完成对你上传媒体的分析，当前仅回退为通用规则生成结果。请检查管理员配置的 Base URL、API Key、模型名和多模态能力。"
-        : "外部模型请求失败，当前回退为本地规则生成结果。请检查管理员配置的 Base URL、API Key 与模型名。",
-    };
-  }
-}
-
-export async function testModelConnection(overrides?: Partial<AssistantSettings>) {
-  const settings = normalizeSettings(overrides);
-  const state = getDemoState("user-admin-root", "member-chen");
-
-  try {
-    const result = await callOpenAiCompatible(
-      state,
-      "plan",
-      "请基于当前会员画像返回一个极简训练计划测试结果。",
-      settings,
-      { strict: true },
-    );
-
-    return {
-      ok: true,
-      message: `测试成功：模型已连通，并通过了会员端 AI 生成链路校验。当前提供方为 ${result.providerLabel}。`,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      message: error instanceof Error ? error.message : "模型测试失败。",
-    };
-  }
-}
-
-export async function testMultimodalConnection(overrides?: Partial<AssistantSettings>) {
-  const settings = normalizeSettings(overrides);
-  const state = getDemoState("user-admin-root", "member-chen");
-
-  try {
-    const imageResult = await callOpenAiCompatible(
-      state,
-      "guidance",
-      multimodalTestSamples.image.prompt,
-      settings,
-      {
-        strict: true,
-        attachment: {
-          kind: multimodalTestSamples.image.kind,
-          mimeType: multimodalTestSamples.image.mimeType,
-          dataUrl: multimodalTestSamples.image.dataUrl,
-          filename: multimodalTestSamples.image.filename,
-        },
-      },
-    );
-
-    const videoResult = await callOpenAiCompatible(
-      state,
-      "guidance",
-      multimodalTestSamples.video.prompt,
-      settings,
-      {
-        strict: true,
-        attachment: {
-          kind: multimodalTestSamples.video.kind,
-          mimeType: multimodalTestSamples.video.mimeType,
-          dataUrl: multimodalTestSamples.video.dataUrl,
-          filename: multimodalTestSamples.video.filename,
-        },
-      },
-    );
-
-    return {
-      ok: true,
-      message: `多模态测试成功：图片与视频链路均已连通。当前提供方为 ${imageResult.providerLabel}。`,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      message: error instanceof Error ? error.message : "多模态模型测试失败。",
+        ? "外部模型未能完成对你上传媒体的分析，当前仅回退为通用规则生成结果。请检查部署的 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL 与多模态能力。"
+        : "外部模型请求失败，当前回退为本地规则生成结果。请检查部署的 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL。",
     };
   }
 }

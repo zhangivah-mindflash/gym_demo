@@ -1,7 +1,5 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import type { AssistantAttachmentKind, AssistantMode } from "@/lib/demo-types";
-import { SESSION_COOKIE, SELECTED_MEMBER_COOKIE } from "@/lib/server/auth";
 import { runAssistant } from "@/lib/server/assistant";
 
 export const runtime = "nodejs";
@@ -47,14 +45,6 @@ async function parseAttachment(formData: FormData) {
 }
 
 export async function POST(request: Request) {
-  const cookieStore = await cookies();
-  const userId = cookieStore.get(SESSION_COOKIE)?.value ?? null;
-  const selectedMemberId = cookieStore.get(SELECTED_MEMBER_COOKIE)?.value ?? null;
-
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const contentType = request.headers.get("content-type") ?? "";
   let mode = "" as AssistantMode;
   let message = "";
@@ -90,13 +80,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "当前只有动作指导支持上传图片或视频。" }, { status: 400 });
   }
 
-  const data = await runAssistant({
-    userId,
-    selectedMemberId,
-    mode,
-    message,
-    attachment,
-  });
+  const data = await runAssistant({ mode, message, attachment });
 
   return NextResponse.json({ data });
 }
