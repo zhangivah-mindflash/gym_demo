@@ -6,14 +6,14 @@ type MainLayoutProps = {
 
 export function MainLayout({ children }: MainLayoutProps) {
   return (
-    <div className="member-app-shell member-app-shell-simple">
-      <header className="member-mobile-topbar">
-        <div className="member-mobile-topbar-title">
-          <strong>PulseLab</strong>
-          <span>训练助理</span>
+    <div className="app-shell">
+      <header className="app-topbar">
+        <div className="app-topbar-title">
+          <strong>训练助理</strong>
+          <span>输入问题 · 生成建议</span>
         </div>
       </header>
-      <main className="app-main member-app-main">{children}</main>
+      <main className="app-main">{children}</main>
     </div>
   );
 }
