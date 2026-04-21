@@ -688,13 +688,11 @@ select {
 }
 
 .result-section-title {
-  font-size: 11px;
-  color: var(--primary);
-  margin: 0 0 10px;
-  letter-spacing: 1.4px;
-  font-weight: 600;
-  text-transform: uppercase;
-  opacity: 0.85;
+  font-size: 17px;
+  color: var(--text);
+  margin: 0 0 12px;
+  letter-spacing: 0.3px;
+  font-weight: 700;
 }
 
 .result-list {
