@@ -68,12 +68,9 @@ export default function AssistantPage() {
     }
   }
 
-  const modeKeys: AssistantMode[] = ["guidance", "plan", "review"];
+  const modeKeys: AssistantMode[] = ["guidance", "plan"];
   const modeLabelKey = (m: AssistantMode) =>
-    (m === "plan" ? "mode_plan" : m === "guidance" ? "mode_guidance" : "mode_review") as
-      | "mode_plan"
-      | "mode_guidance"
-      | "mode_review";
+    (m === "plan" ? "mode_plan" : "mode_guidance") as "mode_plan" | "mode_guidance";
 
   return (
     <MainLayout>
@@ -174,60 +171,41 @@ function EmptyState() {
 
 function Result({ response }: { response: AssistantResponse }) {
   const { t } = useI18n();
-  const badgeClass = response.usedFallback ? "badge badge-warn" : "badge badge-ok";
-  const badgeLabel = response.usedFallback ? t("source_fallback") : response.providerLabel;
 
   return (
     <div className="reveal">
-      <div className="result-summary">
-        <h3>{response.title}</h3>
-        <p>{response.summary}</p>
-        <div className="result-meta">
-          <span className={badgeClass}>{badgeLabel}</span>
-        </div>
-      </div>
-
-      {response.highlights.length > 0 && <ResultList title={t("sec_highlights")} items={response.highlights} />}
-
-      {response.trainingPlan.length > 0 && (
-        <div className="result-section">
-          <p className="result-section-title">{t("sec_plan")}</p>
-          <div className="plan-table">
-            {response.trainingPlan.map((day) => (
-              <div className="plan-row" key={day.dayLabel}>
-                <div className="plan-cell-title">
-                  {day.dayLabel}
-                  <small>{day.focus}</small>
-                </div>
-                <div className="plan-cell-muted">{day.duration}</div>
-                <div className="plan-cell-muted">{day.intensity}</div>
-                <div className="plan-cell-muted">{day.note}</div>
+      {response.mode === "plan" && (
+        <>
+          {response.trainingPlan.length > 0 && (
+            <div className="result-section">
+              <p className="result-section-title">{t("sec_plan")}</p>
+              <div className="plan-table">
+                {response.trainingPlan.map((day) => (
+                  <div className="plan-row" key={day.dayLabel}>
+                    <div className="plan-cell-title">
+                      {day.dayLabel}
+                      <small>{day.focus}</small>
+                    </div>
+                    <div className="plan-cell-muted">{day.duration}</div>
+                    <div className="plan-cell-muted">{day.intensity}</div>
+                    <div className="plan-cell-muted">{day.note}</div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          )}
+          {response.nutritionTips.length > 0 && (
+            <ResultList title={t("sec_nutrition")} items={response.nutritionTips} />
+          )}
+        </>
       )}
 
-      {response.guidancePoints.length > 0 && <ResultList title={t("sec_guidance")} items={response.guidancePoints} />}
-      {response.nutritionTips.length > 0 && <ResultList title={t("sec_nutrition")} items={response.nutritionTips} />}
-      {response.reviewInsights.length > 0 && <ResultList title={t("sec_review")} items={response.reviewInsights} />}
-      {response.recoveryActions.length > 0 && <ResultList title={t("sec_next")} items={response.recoveryActions} />}
-      {response.safetyFlags.length > 0 && <ResultList title={t("sec_safety")} items={response.safetyFlags} warn />}
-      {response.nextSteps.length > 0 && <ResultList title={t("sec_steps")} items={response.nextSteps} />}
+      {response.mode === "guidance" && response.guidancePoints.length > 0 && (
+        <ResultList title={t("sec_guidance")} items={response.guidancePoints} />
+      )}
 
-      {response.citations.length > 0 && (
-        <div className="result-section">
-          <p className="result-section-title">{t("sec_cite")}</p>
-          <div className="citations">
-            {response.citations.map((citation) => (
-              <article className="citation" key={`${citation.source}-${citation.title}`}>
-                <strong>{citation.title}</strong>
-                <p>{citation.note}</p>
-                <span>{citation.source}</span>
-              </article>
-            ))}
-          </div>
-        </div>
+      {response.safetyFlags.length > 0 && (
+        <ResultList title={t("sec_safety")} items={response.safetyFlags} warn />
       )}
     </div>
   );
