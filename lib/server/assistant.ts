@@ -604,15 +604,14 @@ export async function runAssistant(request: AssistantRequest): Promise<Assistant
     return await callOpenAiCompatible(state, request.mode, request.message, settings, {
       attachment: request.attachment,
     });
-  } catch {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     const fallback = buildFallback(state, request.mode, request.message, {
       mediaAttached: Boolean(request.attachment),
     });
     return {
       ...fallback,
-      disclaimer: request.attachment
-        ? "外部模型未能完成对你上传媒体的分析，当前仅回退为通用规则生成结果。请检查部署的 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL 与多模态能力。"
-        : "外部模型请求失败，当前回退为本地规则生成结果。请检查部署的 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL。",
+      disclaimer: `外部模型调用失败，已回退到本地规则生成结果。错误原因：${errorMessage}`,
     };
   }
 }
