@@ -14,7 +14,7 @@ export default function AssistantPage() {
   const [response, setResponse] = useState<AssistantResponse | null>(null);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [attachmentKind, setAttachmentKind] = useState<AssistantAttachmentKind>("image");
+  const attachmentKind: AssistantAttachmentKind = "video";
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [attachmentPreviewUrl, setAttachmentPreviewUrl] = useState("");
 
@@ -77,6 +77,10 @@ export default function AssistantPage() {
 
   return (
     <MainLayout>
+      <h1 className="greeting">{t("greeting")}</h1>
+      <p className="greeting-sub reveal" style={{ animationDelay: "60ms" }}>
+        {t("greeting_sub")}
+      </p>
       <div className="split">
         <section className="card reveal">
           <div className="segmented">
@@ -111,49 +115,19 @@ export default function AssistantPage() {
 
           {mode === "guidance" && (
             <div className="upload">
-              <div className="upload-kind-row">
-                <button
-                  className={attachmentKind === "image" ? "segment segment-active" : "segment"}
-                  onClick={() => {
-                    setAttachmentKind("image");
-                    setAttachmentFile(null);
-                  }}
-                  type="button"
-                >
-                  {t("kind_image")}
-                </button>
-                <button
-                  className={attachmentKind === "video" ? "segment segment-active" : "segment"}
-                  onClick={() => {
-                    setAttachmentKind("video");
-                    setAttachmentFile(null);
-                  }}
-                  type="button"
-                >
-                  {t("kind_video")}
-                </button>
-              </div>
-
               <label className="dropzone">
                 <input
-                  accept={attachmentKind === "image" ? "image/*" : "video/mp4,video/quicktime,video/webm"}
+                  accept="video/mp4,video/quicktime,video/webm"
                   onChange={(event) => setAttachmentFile(event.target.files?.[0] ?? null)}
                   type="file"
                 />
-                <strong>
-                  {attachmentFile ? attachmentFile.name : attachmentKind === "image" ? t("pick_image") : t("pick_video")}
-                </strong>
-                <small>{attachmentKind === "image" ? t("image_hint") : t("video_hint")}</small>
+                <strong>{attachmentFile ? attachmentFile.name : t("pick_video")}</strong>
+                <small>{t("video_hint")}</small>
               </label>
 
               {attachmentPreviewUrl && (
                 <div className="upload-preview">
-                  {attachmentKind === "image" ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img alt="" src={attachmentPreviewUrl} />
-                  ) : (
-                    <video controls src={attachmentPreviewUrl} />
-                  )}
+                  <video controls src={attachmentPreviewUrl} />
                   <button
                     className="btn btn-ghost btn-compact"
                     onClick={() => setAttachmentFile(null)}

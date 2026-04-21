@@ -50,6 +50,69 @@ body {
   min-height: 100vh;
   background: linear-gradient(110deg, #f2e9ef 0%, #ece6f3 45%, #e3e3ef 100%);
   background-attachment: fixed;
+  overflow-x: hidden;
+}
+
+/* Subtle dot grain for depth, fixed so it doesn't scroll */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(circle at center, rgba(107, 92, 191, 0.16) 1px, transparent 1.5px);
+  background-size: 24px 24px;
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 0;
+  mask-image: linear-gradient(180deg, transparent 0%, #000 20%, #000 80%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 20%, #000 80%, transparent 100%);
+}
+
+.app-shell {
+  position: relative;
+  z-index: 1;
+}
+
+/* Decorative concentric rings, fixed bottom-right */
+.deco-rings {
+  position: fixed;
+  right: -110px;
+  bottom: -110px;
+  width: 340px;
+  height: 340px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.35;
+}
+
+.deco-rings::before,
+.deco-rings::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid var(--primary);
+}
+
+.deco-rings::after {
+  inset: 40px;
+  border-color: var(--accent);
+}
+
+.deco-ring-inner {
+  position: absolute;
+  inset: 80px;
+  border-radius: 50%;
+  border: 1px solid var(--primary);
+  opacity: 0.7;
+}
+
+@media (max-width: 900px) {
+  .deco-rings {
+    width: 220px;
+    height: 220px;
+    right: -90px;
+    bottom: -90px;
+  }
 }
 
 button {
@@ -106,11 +169,14 @@ select {
 
 .brand-mark {
   display: inline-block;
-  font-size: 20px;
+  font-size: 28px;
   font-weight: 800;
-  letter-spacing: 2px;
-  color: var(--primary);
+  letter-spacing: 2.5px;
   line-height: 1;
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .brand-mark::before {
@@ -118,10 +184,21 @@ select {
 }
 
 .app-topbar-title strong {
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 0.5px;
-  color: var(--text-soft);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--primary);
+}
+
+@media (max-width: 600px) {
+  .brand-mark {
+    font-size: 22px;
+    letter-spacing: 2px;
+  }
+  .app-topbar-title strong {
+    font-size: 14px;
+    letter-spacing: 0.5px;
+  }
 }
 
 /* ---------- Language switch ---------- */
@@ -158,6 +235,42 @@ select {
   width: 100%;
   margin: 0 auto;
   padding: 40px 28px 80px;
+}
+
+.greeting {
+  margin: 0 0 8px;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--text);
+  display: inline-block;
+  width: 100%;
+  transform-origin: center;
+  animation: greeting-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes greeting-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+.greeting-sub {
+  margin: 0 0 32px;
+  color: var(--text-soft);
+  font-size: 14px;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .greeting {
+    font-size: 24px;
+  }
+  .greeting-sub {
+    margin-bottom: 20px;
+    font-size: 13px;
+  }
 }
 
 /* ---------- Two column ---------- */
@@ -243,6 +356,15 @@ select {
     0 12px 32px rgba(90, 70, 150, 0.08),
     0 0 0 1px rgba(148, 128, 200, 0.06);
   position: relative;
+  transition: transform 300ms cubic-bezier(0.2, 0.9, 0.3, 1), box-shadow 300ms ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 1px 2px rgba(90, 70, 150, 0.04),
+    0 18px 40px rgba(90, 70, 150, 0.12),
+    0 0 0 1px rgba(148, 128, 200, 0.08);
 }
 
 /* ---------- Segmented tabs ---------- */
@@ -278,6 +400,13 @@ select {
   background: #ffffff;
   color: var(--primary);
   box-shadow: 0 2px 8px rgba(148, 128, 200, 0.22), 0 0 0 1px rgba(148, 128, 200, 0.08);
+  animation: segment-pop 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes segment-pop {
+  0% { transform: scale(0.96); }
+  60% { transform: scale(1.03); }
+  100% { transform: scale(1); }
 }
 
 /* ---------- Chips ---------- */
@@ -440,6 +569,26 @@ select {
   background: #cfc8e2;
   box-shadow: none;
   cursor: not-allowed;
+}
+
+.btn-primary:disabled:not([data-idle]) {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary:disabled::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -40%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  animation: btn-shimmer 1.4s linear infinite;
+}
+
+@keyframes btn-shimmer {
+  to { left: 140%; }
 }
 
 .btn-ghost {
@@ -684,32 +833,46 @@ select {
 }
 
 .empty {
-  padding: 48px 20px;
+  padding: 56px 24px;
   text-align: center;
   color: var(--text-mute);
   font-size: 14px;
   border: 1.5px dashed var(--border-strong);
   border-radius: var(--radius);
   background: var(--gradient-soft);
+  position: relative;
+  overflow: hidden;
 }
 
 .empty-icon {
   display: block;
-  width: 44px;
-  height: 44px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
-  background: var(--gradient-primary);
-  opacity: 0.3;
-  margin: 0 auto 14px;
+  margin: 0 auto 18px;
   position: relative;
+  background: var(--gradient-primary);
+  box-shadow: 0 10px 30px rgba(107, 92, 191, 0.28);
+  animation: empty-pulse 3.4s ease-in-out infinite;
 }
 
-.empty-icon::before {
+.empty-icon::before,
+.empty-icon::after {
   content: "";
   position: absolute;
-  inset: 6px;
+  inset: 10px;
   border-radius: 50%;
-  background: var(--surface-solid);
+  background: #ffffff;
+}
+
+.empty-icon::after {
+  inset: 26px;
+  background: var(--gradient-primary);
+}
+
+@keyframes empty-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 10px 30px rgba(107, 92, 191, 0.28); }
+  50% { transform: scale(1.06); box-shadow: 0 14px 40px rgba(107, 92, 191, 0.38); }
 }
 
 /* ---------- Reveal ---------- */

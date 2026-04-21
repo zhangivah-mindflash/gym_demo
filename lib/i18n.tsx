@@ -10,6 +10,8 @@ const dicts: Record<Locale, Dict> = {
   "zh-CN": {
     brand: "YUNI 训练助理",
     brand_sub: "训练助理",
+    greeting: "今天健身了嘛？",
+    greeting_sub: "告诉我你的目标或今天的动作，我帮你出建议",
     ask: "提问",
     result: "建议",
     scenario: "场景",
@@ -44,6 +46,8 @@ const dicts: Record<Locale, Dict> = {
   "zh-TW": {
     brand: "YUNI 訓練助理",
     brand_sub: "訓練助理",
+    greeting: "今天健身了嗎？",
+    greeting_sub: "告訴我你的目標或今天的動作，我幫你出建議",
     ask: "提問",
     result: "建議",
     scenario: "場景",
@@ -78,6 +82,8 @@ const dicts: Record<Locale, Dict> = {
   en: {
     brand: "YUNI Training",
     brand_sub: "Training",
+    greeting: "Did you train today?",
+    greeting_sub: "Tell me your goal or today's movement, I'll help shape it.",
     ask: "Ask",
     result: "Result",
     scenario: "Scenario",

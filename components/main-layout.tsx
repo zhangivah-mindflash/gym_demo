@@ -12,6 +12,9 @@ export function MainLayout({ children }: MainLayoutProps) {
   const { t } = useI18n();
   return (
     <div className="app-shell">
+      <div aria-hidden className="deco-rings">
+        <span className="deco-ring-inner" />
+      </div>
       <header className="app-topbar">
         <div className="app-topbar-title">
           <span aria-hidden className="brand-mark" />
