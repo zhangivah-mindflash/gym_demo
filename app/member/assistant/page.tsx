@@ -160,7 +160,7 @@ export default function AssistantPage() {
         </div>
         <div className="assistant-hero-badge" aria-hidden>
           <span className="assistant-hero-badge-dot" />
-          <span className="assistant-hero-badge-text">LIVE POSE · MEDIAPIPE</span>
+          <span className="assistant-hero-badge-text">LIVE POSE</span>
         </div>
       </section>
       <div className={`split${mode === "guidance" ? " split-single" : ""}`}>
