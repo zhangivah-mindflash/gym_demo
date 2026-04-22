@@ -18,7 +18,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       <header className="app-topbar">
         <div className="app-topbar-title">
           <span aria-hidden className="brand-mark" />
-          <strong>{t("brand_sub")}</strong>
+          <strong>{t("brand")}</strong>
         </div>
         <LangSwitcher />
       </header>

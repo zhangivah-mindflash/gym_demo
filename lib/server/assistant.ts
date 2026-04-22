@@ -95,7 +95,7 @@ function trimBaseUrl(baseUrl: string) {
 }
 
 function isDashScope(baseUrl: string) {
-  return /dashscope\.aliyuncs\.com/i.test(baseUrl);
+  return /dashscope(-intl)?\.aliyuncs\.com/i.test(baseUrl);
 }
 
 function normalizeProtocol(value: string | undefined) {
@@ -590,7 +590,7 @@ export function supportsMultimodal(): boolean {
   const model = (settings["llm-model"] ?? "").toLowerCase();
   const baseUrl = (settings["llm-base-url"] ?? "").toLowerCase();
   if (!model) return false;
-  if (/dashscope\.aliyuncs\.com/.test(baseUrl)) {
+  if (/dashscope(-intl)?\.aliyuncs\.com/.test(baseUrl)) {
     return true;
   }
   return /(gpt-4\.1|gpt-4o|gpt-4\.5|gpt-5|omni|vision|vl)/.test(model);

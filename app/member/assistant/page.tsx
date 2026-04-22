@@ -1,9 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MainLayout } from "@/components/main-layout";
 import { presetTexts, useI18n } from "@/lib/i18n";
-import type { AssistantAttachmentKind, AssistantMode, AssistantResponse } from "@/lib/demo-types";
+import type { AssistantMode, AssistantResponse } from "@/lib/demo-types";
+import {
+  POSE_CONNECTIONS,
+  PoseTracker,
+  preloadPoseModel,
+  type PoseFrame,
+} from "@/lib/client/pose-tracker";
 
 export default function AssistantPage() {
   const { t, locale } = useI18n();
@@ -15,12 +21,18 @@ export default function AssistantPage() {
   const response = responses[mode] ?? null;
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const attachmentKind: AssistantAttachmentKind = "video";
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [attachmentPreviewUrl, setAttachmentPreviewUrl] = useState("");
+  const [scanProgress, setScanProgress] = useState(0);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const trackerRef = useRef<PoseTracker | null>(null);
+  const [poseFrame, setPoseFrame] = useState<PoseFrame | null>(null);
+  const [poseModelReady, setPoseModelReady] = useState(false);
+  const [videoAspect, setVideoAspect] = useState<number | null>(null);
+  const [isTracking, setIsTracking] = useState(false);
 
   useEffect(() => {
-    setMessage(presets[mode][0]);
+    setMessage(mode === "guidance" ? "" : presets[mode][0]);
     setError("");
     if (mode !== "guidance") {
       setAttachmentFile(null);
@@ -28,8 +40,13 @@ export default function AssistantPage() {
   }, [mode, locale]);
 
   useEffect(() => {
+    if (mode !== "guidance") setIsTracking(false);
+  }, [mode]);
+
+  useEffect(() => {
     if (!attachmentFile) {
       setAttachmentPreviewUrl("");
+      setVideoAspect(null);
       return;
     }
     const url = URL.createObjectURL(attachmentFile);
@@ -37,36 +54,95 @@ export default function AssistantPage() {
     return () => URL.revokeObjectURL(url);
   }, [attachmentFile]);
 
-  async function submit() {
+  useEffect(() => {
+    let cancelled = false;
+    preloadPoseModel().then((ok) => {
+      if (!cancelled) setPoseModelReady(ok);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (!isTracking) {
+      video.loop = false;
+      if (trackerRef.current) {
+        trackerRef.current.stop();
+        trackerRef.current = null;
+      }
+      setPoseFrame(null);
+      return;
+    }
+
+    let rafId = 0;
+    const update = () => {
+      const duration = video.duration;
+      if (Number.isFinite(duration) && duration > 0) {
+        const ratio = Math.min(video.currentTime / duration, 1);
+        setScanProgress((prev) => (ratio > prev ? ratio : prev));
+      }
+      rafId = requestAnimationFrame(update);
+    };
+
+    video.muted = true;
+    video.loop = true;
+    video.currentTime = 0;
+    const playPromise = video.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => undefined);
+    }
+    rafId = requestAnimationFrame(update);
+
+    const tracker = new PoseTracker();
+    trackerRef.current = tracker;
+    tracker.start(video, (frame) => setPoseFrame(frame)).catch((err) => {
+      console.warn("[pose] tracker start failed", err);
+    });
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      video.loop = false;
+      try {
+        video.pause();
+      } catch {
+        // ignore
+      }
+      tracker.stop();
+      if (trackerRef.current === tracker) trackerRef.current = null;
+      setPoseFrame(null);
+    };
+  }, [isTracking]);
+
+  function startTracking() {
+    setScanProgress(0);
+    setError("");
+    setIsTracking(true);
+  }
+
+  function stopTracking() {
+    setIsTracking(false);
+  }
+
+  async function submitPlan() {
     setIsSubmitting(true);
     setError("");
-
     try {
-      const apiResponse = await (attachmentFile && mode === "guidance"
-        ? (() => {
-            const formData = new FormData();
-            formData.append("mode", mode);
-            formData.append("message", message);
-            formData.append("attachmentKind", attachmentKind);
-            formData.append("attachment", attachmentFile);
-            return fetch("/api/assistant", { method: "POST", body: formData });
-          })()
-        : fetch("/api/assistant", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ mode, message }),
-          }));
-
+      const apiResponse = await fetch("/api/assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode, message }),
+      });
       const json = (await apiResponse.json()) as { data?: AssistantResponse; error?: string };
-      if (!apiResponse.ok || !json.data) {
-        throw new Error(json.error ?? "Error");
-      }
-      setResponses((prev) => ({ ...prev, [mode]: json.data }));
+      if (!apiResponse.ok || !json.data) throw new Error(json.error ?? "Error");
+      setResponses((prev) => ({ ...prev, [mode]: json.data! }));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error");
-    } finally {
-      setIsSubmitting(false);
     }
+    setIsSubmitting(false);
   }
 
   const modeKeys: AssistantMode[] = ["guidance", "plan"];
@@ -75,11 +151,19 @@ export default function AssistantPage() {
 
   return (
     <MainLayout>
-      <h1 className="greeting">{t("greeting")}</h1>
-      <p className="greeting-sub reveal" style={{ animationDelay: "60ms" }}>
-        {t("greeting_sub")}
-      </p>
-      <div className="split">
+      <div className="assistant-dark">
+      <section className="assistant-hero reveal">
+        <div className="assistant-hero-copy">
+          <p className="assistant-hero-eyebrow">AI MOTION TRACKING</p>
+          <h1 className="assistant-hero-title">{t("greeting")}</h1>
+          <p className="assistant-hero-sub">{t("greeting_sub")}</p>
+        </div>
+        <div className="assistant-hero-badge" aria-hidden>
+          <span className="assistant-hero-badge-dot" />
+          <span className="assistant-hero-badge-text">LIVE POSE · MEDIAPIPE</span>
+        </div>
+      </section>
+      <div className={`split${mode === "guidance" ? " split-single" : ""}`}>
         <section className="card reveal">
           <div className="segmented">
             {modeKeys.map((key) => (
@@ -94,22 +178,26 @@ export default function AssistantPage() {
             ))}
           </div>
 
-          <div className="chips" style={{ marginTop: 16 }}>
-            {presets[mode].map((preset) => (
-              <button className="chip" key={preset} onClick={() => setMessage(preset)} type="button">
-                {preset}
-              </button>
-            ))}
-          </div>
+          {mode !== "guidance" && (
+            <>
+              <div className="chips" style={{ marginTop: 16 }}>
+                {presets[mode].map((preset) => (
+                  <button className="chip" key={preset} onClick={() => setMessage(preset)} type="button">
+                    {preset}
+                  </button>
+                ))}
+              </div>
 
-          <label className="field">
-            <textarea
-              rows={5}
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              placeholder={t("placeholder")}
-            />
-          </label>
+              <label className="field">
+                <textarea
+                  rows={5}
+                  value={message}
+                  onChange={(event) => setMessage(event.target.value)}
+                  placeholder={t("placeholder")}
+                />
+              </label>
+            </>
+          )}
 
           {mode === "guidance" && (
             <div className="upload">
@@ -119,17 +207,42 @@ export default function AssistantPage() {
                   onChange={(event) => setAttachmentFile(event.target.files?.[0] ?? null)}
                   type="file"
                 />
-                <strong>{attachmentFile ? attachmentFile.name : t("pick_video")}</strong>
+                <strong>{attachmentFile ? t("replace_video") : t("pick_video")}</strong>
                 <small>{t("video_hint")}</small>
               </label>
 
               {attachmentPreviewUrl && (
                 <div className="upload-preview">
-                  <video controls src={attachmentPreviewUrl} />
+                  <div
+                    className={`upload-preview-frame${isTracking ? " is-scanning" : ""}`}
+                    style={videoAspect ? { aspectRatio: videoAspect } : undefined}
+                  >
+                    <video
+                      ref={videoRef}
+                      controls={!isTracking}
+                      src={attachmentPreviewUrl}
+                      playsInline
+                      muted={isTracking}
+                      onLoadedMetadata={(event) => {
+                        const el = event.currentTarget;
+                        if (el.videoWidth > 0 && el.videoHeight > 0) {
+                          setVideoAspect(el.videoWidth / el.videoHeight);
+                        }
+                      }}
+                    />
+                    {isTracking && (
+                      <PoseScanOverlay
+                        progress={scanProgress}
+                        poseFrame={poseFrame}
+                        modelReady={poseModelReady}
+                      />
+                    )}
+                  </div>
                   <button
                     className="btn btn-ghost btn-compact"
                     onClick={() => setAttachmentFile(null)}
                     type="button"
+                    disabled={isTracking}
                   >
                     {t("remove_media")}
                   </button>
@@ -141,20 +254,34 @@ export default function AssistantPage() {
           {error && <div className="alert">{error}</div>}
 
           <div className="button-row">
-            <button
-              className="btn btn-primary"
-              disabled={isSubmitting || !message.trim()}
-              onClick={() => void submit()}
-              type="button"
-            >
-              {isSubmitting ? t("generating") : t("generate")}
-            </button>
+            {mode === "guidance" ? (
+              <button
+                className={`btn ${isTracking ? "btn-ghost" : "btn-primary"}`}
+                disabled={!attachmentFile}
+                onClick={() => (isTracking ? stopTracking() : startTracking())}
+                type="button"
+              >
+                {isTracking ? t("track_stop") : t("track_start")}
+              </button>
+            ) : (
+              <button
+                className="btn btn-primary"
+                disabled={isSubmitting || !message.trim()}
+                onClick={() => void submitPlan()}
+                type="button"
+              >
+                {isSubmitting ? t("generating") : t("generate")}
+              </button>
+            )}
           </div>
         </section>
 
-        <section className="card reveal" style={{ animationDelay: "80ms" }}>
-          {response ? <Result response={response} /> : <EmptyState />}
-        </section>
+        {mode !== "guidance" && (
+          <section className="card reveal" style={{ animationDelay: "80ms" }}>
+            {response ? <Result response={response} /> : <EmptyState />}
+          </section>
+        )}
+      </div>
       </div>
     </MainLayout>
   );
@@ -169,6 +296,7 @@ function EmptyState() {
     </div>
   );
 }
+
 
 function Result({ response }: { response: AssistantResponse }) {
   const { t } = useI18n();
@@ -220,6 +348,199 @@ function Result({ response }: { response: AssistantResponse }) {
       {response.safetyFlags.length > 0 && (
         <ResultList title={t("sec_safety")} items={response.safetyFlags} warn />
       )}
+    </div>
+  );
+}
+
+type BiomechState = "idle" | "holding" | "success";
+
+function PoseScanOverlay({
+  progress,
+  poseFrame,
+  modelReady,
+}: {
+  progress: number;
+  poseFrame: PoseFrame | null;
+  modelReady: boolean;
+}) {
+  const { t } = useI18n();
+  const clamped = Math.max(0, Math.min(1, progress));
+  const percent = Math.round(clamped * 100);
+
+  const landmarks = poseFrame?.landmarks ?? [];
+  const metrics = poseFrame?.metrics ?? null;
+  const hasPose = landmarks.length >= 33 && metrics !== null;
+
+  const baselineY =
+    metrics && Number.isFinite(metrics.hipY)
+      ? Math.max(0.05, Math.min(0.95, metrics.hipY)) * 100
+      : 58;
+
+  const biomech: BiomechState = !metrics
+    ? "idle"
+    : metrics.state === "parallel" || metrics.state === "deep"
+      ? "success"
+      : metrics.state === "descending"
+        ? "holding"
+        : "idle";
+  const biomechVisible = biomech !== "idle";
+
+  return (
+    <div
+      className="pose-scan"
+      aria-hidden
+      style={{ ["--scan-pos" as string]: `${percent}%` }}
+    >
+      <span className="pose-scan-bracket pose-scan-bracket-tl" />
+      <span className="pose-scan-bracket pose-scan-bracket-tr" />
+      <span className="pose-scan-bracket pose-scan-bracket-bl" />
+      <span className="pose-scan-bracket pose-scan-bracket-br" />
+
+      <div className="pose-scan-line" />
+      <div className="pose-scan-trail" />
+
+      {hasPose && <PoseSkeleton landmarks={landmarks} />}
+
+      {metrics && Number.isFinite(metrics.shoulderY) && (
+        <BiomechBaseline
+          yPercent={Math.max(5, Math.min(95, metrics.shoulderY * 100))}
+          visible={biomechVisible}
+          state={biomech}
+          label="SHOULDER LINE"
+          value={metrics.shoulderAngle}
+          unit="SHOULDER TILT"
+        />
+      )}
+
+      {metrics && (
+        <BiomechBaseline
+          yPercent={baselineY}
+          visible={biomechVisible}
+          state={biomech}
+          label="HIP LINE"
+          value={metrics.hipAngle}
+          unit="TRUNK LEAN"
+        />
+      )}
+
+      {metrics && (
+        <BiomechBaseline
+          yPercent={Math.max(5, Math.min(95, metrics.kneeY * 100))}
+          visible={biomechVisible}
+          state={biomech}
+          label="KNEE LINE"
+          value={metrics.kneeAngle}
+          unit="KNEE FLEX"
+        />
+      )}
+
+      <div className="pose-scan-bar">
+        <div className="pose-scan-bar-fill" style={{ width: `${percent}%` }} />
+      </div>
+
+      <div className="pose-scan-status">
+        <span className="pose-scan-status-dot" />
+        <span>
+          {!modelReady
+            ? t("pose_loading")
+            : hasPose
+              ? t("pose_tracking")
+              : t("scan_status")}
+        </span>
+        <span className="pose-scan-status-percent">{percent}%</span>
+      </div>
+    </div>
+  );
+}
+
+const VIS_THRESH_LINE = 0.22;
+const VIS_THRESH_DOT = 0.22;
+
+function PoseSkeleton({ landmarks }: { landmarks: PoseFrame["landmarks"] }) {
+  return (
+    <svg
+      className="pose-skeleton"
+      viewBox="0 0 1 1"
+      preserveAspectRatio="none"
+      aria-hidden
+    >
+      <g className="pose-skeleton-bones">
+        {POSE_CONNECTIONS.map(([a, b]) => {
+          const la = landmarks[a];
+          const lb = landmarks[b];
+          if (!la || !lb) return null;
+          const visA = (la.visibility ?? 1) >= VIS_THRESH_LINE;
+          const visB = (lb.visibility ?? 1) >= VIS_THRESH_LINE;
+          if (!visA || !visB) return null;
+          return (
+            <line
+              key={`${a}-${b}`}
+              x1={la.x}
+              y1={la.y}
+              x2={lb.x}
+              y2={lb.y}
+              className="pose-skeleton-bone"
+            />
+          );
+        })}
+      </g>
+      <g className="pose-skeleton-joints">
+        {landmarks.map((lm, idx) => {
+          if (!lm) return null;
+          if ((lm.visibility ?? 1) < VIS_THRESH_DOT) return null;
+          if (idx <= 10) return null;
+          const isMajor =
+            idx === 11 ||
+            idx === 12 ||
+            idx === 13 ||
+            idx === 14 ||
+            idx === 15 ||
+            idx === 16 ||
+            idx >= 23;
+          const r = isMajor ? 0.007 : 0.004;
+          return (
+            <circle
+              key={idx}
+              cx={lm.x}
+              cy={lm.y}
+              r={r}
+              className={`pose-skeleton-dot${isMajor ? " pose-skeleton-dot-joint" : ""}`}
+            />
+          );
+        })}
+      </g>
+    </svg>
+  );
+}
+
+function BiomechBaseline({
+  yPercent,
+  visible,
+  state,
+  label,
+  value,
+  unit,
+}: {
+  yPercent: number;
+  visible: boolean;
+  state: BiomechState;
+  label: string;
+  value: number;
+  unit: string;
+}) {
+  const display = Number.isFinite(value) ? `${Math.round(value)}°` : "—";
+  return (
+    <div
+      className={`biomech-layer biomech-state-${state}${visible ? " is-visible" : ""}`}
+      style={{ ["--biomech-y" as string]: `${yPercent}%` }}
+    >
+      <div className="biomech-baseline">
+        <div className="biomech-baseline-line" />
+        <div className="biomech-baseline-label" title={label}>
+          <span className="biomech-baseline-angle">{display}</span>
+          <span className="biomech-baseline-unit">{unit}</span>
+        </div>
+      </div>
     </div>
   );
 }
